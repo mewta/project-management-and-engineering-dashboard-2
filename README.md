@@ -17,9 +17,9 @@ DevBoard lets teams create organizations, manage projects, assign issues, track 
 - Auth: NextAuth.js credentials provider
 - Realtime: Socket.io
 
-## Five-Day Implementation Plan
+## Implementation Plan
 
-### Day 1: Database, Auth, Core Backend
+###  1: Database, Auth, Core Backend
 
 1. Design database schema.
 2. Implement Prisma models.
@@ -28,7 +28,7 @@ DevBoard lets teams create organizations, manage projects, assign issues, track 
 5. Build issue APIs.
 6. Verify APIs with HTTP requests or Postman.
 
-Implemented Day 1 endpoints:
+Implemented endpoints:
 
 - `POST /api/auth/signup`
 - `POST /api/organizations`
@@ -38,7 +38,7 @@ Implemented Day 1 endpoints:
 - `POST /api/issues`
 - `GET /api/issues`
 
-### Day 2: Backend Business Logic
+###  2: Backend Business Logic
 
 1. Add role-based access control.
 2. Add issue status transition rules.
@@ -56,7 +56,7 @@ Target endpoints:
 - `GET /api/projects/:id/activity`
 - `GET /api/projects/:id/issues?status=TODO&priority=HIGH`
 
-Implemented Day 2 behavior:
+Implemented behavior:
 
 - Organization RBAC with `OWNER`, `ADMIN`, and `MEMBER` roles.
 - Project creation restricted to owners/admins.
@@ -67,7 +67,7 @@ Implemented Day 2 behavior:
 - Activity log generation for status changes, assignments, and comments.
 - Issue filters for status, priority, assignee, and search query.
 
-### Day 3: Frontend MVP
+### 3: Frontend MVP
 
 1. Build `/login` and `/signup`.
 2. Build `/dashboard`.
@@ -77,7 +77,7 @@ Implemented Day 2 behavior:
 6. Build issue detail and comments UI.
 7. Build activity feed.
 
-Implemented Day 3 behavior:
+Implemented behavior:
 
 - Working `/login` and `/signup` pages backed by NextAuth credentials.
 - Protected `/dashboard` page with organization creation, organization list, and project list.
@@ -86,7 +86,7 @@ Implemented Day 3 behavior:
 - Loading, empty, and error states for the main frontend flows.
 - Browser-verified login, dashboard loading, project board rendering, and comment creation.
 
-### Day 4: Realtime and Analytics
+###  4: Realtime and Analytics
 
 1. Add Socket.io server.
 2. Broadcast issue status updates.
@@ -96,7 +96,7 @@ Implemented Day 3 behavior:
 
 Analytics should include total issues, completed issues, overdue issues, issues by status, issues by priority, and member workload.
 
-Implemented Day 4 behavior:
+Implemented behavior:
 
 - Custom Next.js HTTP server with Socket.io support.
 - Project room subscriptions with `project:join` and `project:leave`.
@@ -106,7 +106,7 @@ Implemented Day 4 behavior:
 - Recharts visualizations for issues by status, issues by priority, and member workload.
 - Project page live status indicator and automatic refresh on realtime events.
 
-### Day 5: Polish, Testing, Deployment
+### 5: Polish, Testing, Deployment
 
 1. Add clean loading, empty, and error states.
 2. Add backend tests for RBAC, status updates, activity logs, and analytics.
