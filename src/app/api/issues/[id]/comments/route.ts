@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { emitProjectEvent } from "@/lib/realtime";
 import {
   handleApiError,
   requireIssueAccess,
@@ -77,6 +78,12 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       return createdComment;
+    });
+
+    await emitProjectEvent(issue.projectId, "issue:commented", {
+      issueId: issue.id,
+      projectId: issue.projectId,
+      commentId: comment.id,
     });
 
     return NextResponse.json({ comment }, { status: 201 });

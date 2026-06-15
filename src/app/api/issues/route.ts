@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { emitProjectEvent } from "@/lib/realtime";
 import {
   ensureUserBelongsToOrganization,
   handleApiError,
@@ -140,6 +141,11 @@ export async function POST(request: Request) {
       });
 
       return createdIssue;
+    });
+
+    await emitProjectEvent(payload.projectId, "issue:created", {
+      issueId: issue.id,
+      projectId: payload.projectId,
     });
 
     return NextResponse.json({ issue }, { status: 201 });

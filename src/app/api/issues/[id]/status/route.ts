@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { emitProjectEvent } from "@/lib/realtime";
 import {
   ApiError,
   handleApiError,
@@ -73,6 +74,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
 
       return changedIssue;
+    });
+
+    await emitProjectEvent(issue.projectId, "issue:updated", {
+      issueId: issue.id,
+      projectId: issue.projectId,
+      status: updatedIssue.status,
     });
 
     return NextResponse.json({ issue: updatedIssue });

@@ -96,6 +96,16 @@ Implemented Day 3 behavior:
 
 Analytics should include total issues, completed issues, overdue issues, issues by status, issues by priority, and member workload.
 
+Implemented Day 4 behavior:
+
+- Custom Next.js HTTP server with Socket.io support.
+- Project room subscriptions with `project:join` and `project:leave`.
+- Realtime broadcasts for issue creation, issue status/assignment updates, and comments.
+- Internal authenticated realtime bridge used by API routes after database mutations.
+- `GET /api/projects/:id/analytics` for project dashboard metrics.
+- Recharts visualizations for issues by status, issues by priority, and member workload.
+- Project page live status indicator and automatic refresh on realtime events.
+
 ### Day 5: Polish, Testing, Deployment
 
 1. Add clean loading, empty, and error states.

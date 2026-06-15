@@ -2,7 +2,17 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MessageSquare, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, MessageSquare, Plus, RefreshCw, Wifi } from "lucide-react";
+import { io } from "socket.io-client";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 
 type IssueStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
@@ -45,6 +55,20 @@ type Activity = {
   issue: { id: string; title: string; status: IssueStatus; priority: IssuePriority } | null;
 };
 
+type Analytics = {
+  totalIssues: number;
+  completedIssues: number;
+  overdueIssues: number;
+  issuesByStatus: { status: IssueStatus; count: number }[];
+  issuesByPriority: { priority: IssuePriority; count: number }[];
+  memberWorkload: {
+    assigneeId: string | null;
+    name: string;
+    email: string | null;
+    count: number;
+  }[];
+};
+
 type ProjectClientProps = {
   projectId: string;
 };
@@ -66,6 +90,7 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState("");
@@ -75,6 +100,7 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
   const [filterStatus, setFilterStatus] = useState<IssueStatus | "ALL">("ALL");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [realtimeStatus, setRealtimeStatus] = useState("Connecting");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -93,13 +119,20 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
     if (filterStatus !== "ALL") issueParams.set("status", filterStatus);
     if (query) issueParams.set("q", query);
 
-    const [projectResponse, issueResponse, activityResponse] = await Promise.all([
+    const [projectResponse, issueResponse, activityResponse, analyticsResponse] =
+      await Promise.all([
       fetch("/api/projects"),
       fetch(`/api/projects/${projectId}/issues?${issueParams.toString()}`),
       fetch(`/api/projects/${projectId}/activity`),
+      fetch(`/api/projects/${projectId}/analytics`),
     ]);
 
-    if (!projectResponse.ok || !issueResponse.ok || !activityResponse.ok) {
+    if (
+      !projectResponse.ok ||
+      !issueResponse.ok ||
+      !activityResponse.ok ||
+      !analyticsResponse.ok
+    ) {
       setError("Could not load project data.");
       setIsLoading(false);
       return;
@@ -108,10 +141,12 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
     const projectBody = (await projectResponse.json()) as { projects: Project[] };
     const issueBody = (await issueResponse.json()) as { issues: Issue[] };
     const activityBody = (await activityResponse.json()) as { activity: Activity[] };
+    const analyticsBody = (await analyticsResponse.json()) as { analytics: Analytics };
 
     setProjects(projectBody.projects);
     setIssues(issueBody.issues);
     setActivity(activityBody.activity);
+    setAnalytics(analyticsBody.analytics);
     setIsLoading(false);
   }
 
@@ -135,20 +170,28 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
       fetch("/api/projects"),
       fetch(`/api/projects/${projectId}/issues?${issueParams.toString()}`),
       fetch(`/api/projects/${projectId}/activity`),
+      fetch(`/api/projects/${projectId}/analytics`),
     ])
-      .then(async ([projectResponse, issueResponse, activityResponse]) => {
-        if (!projectResponse.ok || !issueResponse.ok || !activityResponse.ok) {
+      .then(async ([projectResponse, issueResponse, activityResponse, analyticsResponse]) => {
+        if (
+          !projectResponse.ok ||
+          !issueResponse.ok ||
+          !activityResponse.ok ||
+          !analyticsResponse.ok
+        ) {
           throw new Error("Could not load project data.");
         }
 
         const projectBody = (await projectResponse.json()) as { projects: Project[] };
         const issueBody = (await issueResponse.json()) as { issues: Issue[] };
         const activityBody = (await activityResponse.json()) as { activity: Activity[] };
+        const analyticsBody = (await analyticsResponse.json()) as { analytics: Analytics };
 
         if (isActive) {
           setProjects(projectBody.projects);
           setIssues(issueBody.issues);
           setActivity(activityBody.activity);
+          setAnalytics(analyticsBody.analytics);
           setIsLoading(false);
         }
       })
@@ -163,6 +206,76 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
       isActive = false;
     };
   }, [projectId, filterStatus]);
+
+  useEffect(() => {
+    let isActive = true;
+    const socket = io();
+
+    async function refreshFromRealtime(issueId?: string) {
+      const issueParams = new URLSearchParams();
+      if (filterStatus !== "ALL") issueParams.set("status", filterStatus);
+      if (query) issueParams.set("q", query);
+
+      const [projectResponse, issueResponse, activityResponse, analyticsResponse] =
+        await Promise.all([
+          fetch("/api/projects"),
+          fetch(`/api/projects/${projectId}/issues?${issueParams.toString()}`),
+          fetch(`/api/projects/${projectId}/activity`),
+          fetch(`/api/projects/${projectId}/analytics`),
+        ]);
+
+      if (
+        !isActive ||
+        !projectResponse.ok ||
+        !issueResponse.ok ||
+        !activityResponse.ok ||
+        !analyticsResponse.ok
+      ) {
+        return;
+      }
+
+      const projectBody = (await projectResponse.json()) as { projects: Project[] };
+      const issueBody = (await issueResponse.json()) as { issues: Issue[] };
+      const activityBody = (await activityResponse.json()) as { activity: Activity[] };
+      const analyticsBody = (await analyticsResponse.json()) as { analytics: Analytics };
+
+      setProjects(projectBody.projects);
+      setIssues(issueBody.issues);
+      setActivity(activityBody.activity);
+      setAnalytics(analyticsBody.analytics);
+
+      if (issueId && issueId === selectedIssueId) {
+        await loadComments(issueId);
+      }
+    }
+
+    socket.on("connect", () => {
+      setRealtimeStatus("Live");
+      socket.emit("project:join", projectId);
+    });
+
+    socket.on("disconnect", () => {
+      setRealtimeStatus("Offline");
+    });
+
+    socket.on("issue:created", (payload: { issueId?: string }) => {
+      void refreshFromRealtime(payload.issueId);
+    });
+
+    socket.on("issue:updated", (payload: { issueId?: string }) => {
+      void refreshFromRealtime(payload.issueId);
+    });
+
+    socket.on("issue:commented", (payload: { issueId?: string }) => {
+      void refreshFromRealtime(payload.issueId);
+    });
+
+    return () => {
+      isActive = false;
+      socket.emit("project:leave", projectId);
+      socket.disconnect();
+    };
+  }, [filterStatus, projectId, query, selectedIssueId]);
 
   useEffect(() => {
     if (!selectedIssueId) {
@@ -315,7 +428,13 @@ export function ProjectClient({ projectId }: ProjectClientProps) {
             <p className="mt-2 text-sm text-muted-foreground">
               {project?.description || "No project description"}
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-xs font-medium">
+              <Wifi className="size-3.5" />
+              {realtimeStatus}
+            </div>
           </section>
+
+          {analytics ? <AnalyticsPanel analytics={analytics} /> : null}
 
           <section className="rounded-lg border bg-background p-5 shadow-sm">
             <h2 className="text-base font-semibold">Create issue</h2>
@@ -540,6 +659,83 @@ function Detail({ label, value }: { label: string; value: string }) {
     <div className="rounded-md bg-muted p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 break-words text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
+function AnalyticsPanel({ analytics }: { analytics: Analytics }) {
+  return (
+    <section className="space-y-4 rounded-lg border bg-background p-5 shadow-sm">
+      <div>
+        <h2 className="text-base font-semibold">Analytics</h2>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <Metric label="Total" value={analytics.totalIssues} />
+          <Metric label="Done" value={analytics.completedIssues} />
+          <Metric label="Overdue" value={analytics.overdueIssues} />
+        </div>
+      </div>
+
+      <ChartCard title="Issues by status">
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={analytics.issuesByStatus}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="status" tick={{ fontSize: 10 }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Bar dataKey="count" fill="#18181b" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      <ChartCard title="Issues by priority">
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={analytics.issuesByPriority}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="priority" tick={{ fontSize: 10 }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      <ChartCard title="Member workload">
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={analytics.memberWorkload}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Bar dataKey="count" fill="#16a34a" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-muted p-3 text-center">
+      <p className="text-xl font-semibold">{value}</p>
+      <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border p-3">
+      <h3 className="mb-3 text-sm font-medium">{title}</h3>
+      {children}
     </div>
   );
 }
