@@ -1,31 +1,41 @@
-import { IssuePriority, IssueStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  ApiError,
+  ensureUserBelongsToOrganization,
   handleApiError,
   requireProjectAccess,
   requireUserId,
 } from "@/lib/api";
-import { createIssueSchema } from "@/lib/validators";
+import { createIssueSchema, issueFilterSchema } from "@/lib/validators";
 
 export async function GET(request: Request) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get("projectId") ?? undefined;
-    const status = searchParams.get("status") as IssueStatus | null;
-    const priority = searchParams.get("priority") as IssuePriority | null;
+    const filters = issueFilterSchema.parse({
+      projectId: searchParams.get("projectId") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+      priority: searchParams.get("priority") ?? undefined,
+      assigneeId: searchParams.get("assigneeId") ?? undefined,
+      q: searchParams.get("q") ?? undefined,
+    });
 
-    if (projectId) {
-      await requireProjectAccess(userId, projectId);
+    if (filters.projectId) {
+      await requireProjectAccess(userId, filters.projectId);
     }
 
     const issues = await prisma.issue.findMany({
       where: {
-        projectId,
-        status: status ?? undefined,
-        priority: priority ?? undefined,
+        projectId: filters.projectId,
+        status: filters.status,
+        priority: filters.priority,
+        assigneeId: filters.assigneeId,
+        OR: filters.q
+          ? [
+              { title: { contains: filters.q, mode: "insensitive" } },
+              { description: { contains: filters.q, mode: "insensitive" } },
+            ]
+          : undefined,
         project: {
           organization: {
             memberships: {
@@ -78,18 +88,11 @@ export async function POST(request: Request) {
     const project = await requireProjectAccess(userId, payload.projectId);
 
     if (payload.assigneeId) {
-      const assigneeMembership = await prisma.membership.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: payload.assigneeId,
-            organizationId: project.organizationId,
-          },
-        },
-      });
-
-      if (!assigneeMembership) {
-        throw new ApiError(400, "Assignee must be a member of the project organization");
-      }
+      await ensureUserBelongsToOrganization(
+        payload.assigneeId,
+        project.organizationId,
+        "Assignee must be a member of the project organization",
+      );
     }
 
     const issue = await prisma.$transaction(async (tx) => {

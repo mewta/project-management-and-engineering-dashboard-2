@@ -1,6 +1,7 @@
 # DevBoard
 
-Real-time project management and engineering dashboard for small engineering teams.
+Real-time project 
+management and engineering dashboard for small engineering teams.
 
 ## Problem Statement
 
@@ -54,6 +55,17 @@ Target endpoints:
 - `GET /api/issues/:id/comments`
 - `GET /api/projects/:id/activity`
 - `GET /api/projects/:id/issues?status=TODO&priority=HIGH`
+
+Implemented Day 2 behavior:
+
+- Organization RBAC with `OWNER`, `ADMIN`, and `MEMBER` roles.
+- Project creation restricted to owners/admins.
+- Issue assignment restricted to owners/admins.
+- Status transitions restricted to owners/admins, reporters, or assignees.
+- Valid issue status transitions enforced by backend logic.
+- Comment creation and listing for project organization members.
+- Activity log generation for status changes, assignments, and comments.
+- Issue filters for status, priority, assignee, and search query.
 
 ### Day 3: Frontend MVP
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   handleApiError,
   requireOrganizationMembership,
+  requireOrganizationRole,
   requireUserId,
 } from "@/lib/api";
 import { createProjectSchema } from "@/lib/validators";
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     const userId = await requireUserId();
     const payload = createProjectSchema.parse(await request.json());
 
-    await requireOrganizationMembership(userId, payload.organizationId);
+    await requireOrganizationRole(userId, payload.organizationId, "ADMIN");
 
     const project = await prisma.$transaction(async (tx) => {
       const createdProject = await tx.project.create({

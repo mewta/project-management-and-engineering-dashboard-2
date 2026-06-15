@@ -32,3 +32,23 @@ export const createIssueSchema = z.object({
   assigneeId: z.string().min(1).optional(),
   dueDate: z.string().datetime().optional(),
 });
+
+export const updateIssueStatusSchema = z.object({
+  status: z.nativeEnum(IssueStatus),
+});
+
+export const assignIssueSchema = z.object({
+  assigneeId: z.string().min(1).nullable(),
+});
+
+export const createCommentSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+});
+
+export const issueFilterSchema = z.object({
+  projectId: z.string().min(1).optional(),
+  status: z.nativeEnum(IssueStatus).optional(),
+  priority: z.nativeEnum(IssuePriority).optional(),
+  assigneeId: z.string().min(1).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+});
