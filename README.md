@@ -77,6 +77,15 @@ Implemented Day 2 behavior:
 6. Build issue detail and comments UI.
 7. Build activity feed.
 
+Implemented Day 3 behavior:
+
+- Working `/login` and `/signup` pages backed by NextAuth credentials.
+- Protected `/dashboard` page with organization creation, organization list, and project list.
+- Protected `/organizations/:orgId` page with project creation and project list.
+- Protected `/projects/:projectId` page with issue creation, Kanban board, issue detail panel, comments, and activity feed.
+- Loading, empty, and error states for the main frontend flows.
+- Browser-verified login, dashboard loading, project board rendering, and comment creation.
+
 ### Day 4: Realtime and Analytics
 
 1. Add Socket.io server.
