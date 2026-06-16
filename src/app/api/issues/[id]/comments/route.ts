@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildCommentCreatedMetadata } from "@/lib/activity";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   handleApiError,
   requireIssueAccess,
+  requireOrganizationRole,
   requireUserId,
 } from "@/lib/api";
 import { createCommentSchema } from "@/lib/validators";
@@ -45,6 +47,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const payload = createCommentSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);
+    await requireOrganizationRole(userId, issue.project.organizationId, "DEVELOPER");
 
     const comment = await prisma.$transaction(async (tx) => {
       const createdComment = await tx.comment.create({
@@ -70,10 +73,10 @@ export async function POST(request: Request, context: RouteContext) {
           actorId: userId,
           projectId: issue.projectId,
           issueId: issue.id,
-          metadata: {
+          metadata: buildCommentCreatedMetadata({
             issueTitle: issue.title,
             commentId: createdComment.id,
-          },
+          }),
         },
       });
 

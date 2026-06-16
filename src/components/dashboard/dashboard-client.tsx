@@ -166,7 +166,7 @@ export function DashboardClient() {
                       </p>
                     </div>
                     <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                      {organization.memberships[0]?.role ?? "MEMBER"}
+                      {organization.memberships[0]?.role ?? "VIEWER"}
                     </span>
                   </div>
                 </Link>

@@ -70,9 +70,10 @@ export async function requireOrganizationMembership(
 }
 
 const roleRank: Record<MembershipRole, number> = {
-  MEMBER: 1,
-  ADMIN: 2,
-  OWNER: 3,
+  VIEWER: 1,
+  DEVELOPER: 2,
+  ADMIN: 3,
+  OWNER: 4,
 };
 
 export function hasMinimumRole(role: MembershipRole, minimumRole: MembershipRole) {

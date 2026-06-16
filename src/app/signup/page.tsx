@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SignupForm } from "@/components/auth/signup-form";
 
 export default function SignupPage() {
@@ -13,7 +14,9 @@ export default function SignupPage() {
             Start with an account, then create your first organization.
           </p>
         </div>
-        <SignupForm />
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+          <SignupForm />
+        </Suspense>
       </section>
     </main>
   );

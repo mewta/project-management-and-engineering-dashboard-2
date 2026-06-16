@@ -22,7 +22,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       title="Project"
       description="Create issues, move work across the board, comment, and inspect recent activity."
     >
-      <ProjectClient projectId={projectId} />
+      <ProjectClient projectId={projectId} currentUserId={session.user.id} />
     </AppShell>
   );
 }

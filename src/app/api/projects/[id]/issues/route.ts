@@ -20,6 +20,7 @@ export async function GET(request: Request, context: RouteContext) {
       priority: searchParams.get("priority") ?? undefined,
       assigneeId: searchParams.get("assigneeId") ?? undefined,
       q: searchParams.get("q") ?? undefined,
+      label: searchParams.get("label") ?? undefined,
     });
 
     const issues = await prisma.issue.findMany({
@@ -28,6 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
         status: filters.status,
         priority: filters.priority,
         assigneeId: filters.assigneeId,
+        labels: filters.label ? { has: filters.label } : undefined,
         OR: filters.q
           ? [
               { title: { contains: filters.q, mode: "insensitive" } },

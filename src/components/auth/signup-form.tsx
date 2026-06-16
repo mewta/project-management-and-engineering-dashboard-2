@@ -2,12 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,6 +44,15 @@ export function SignupForm() {
     if (signInResult?.error) {
       router.push("/login");
       return;
+    }
+
+    const inviteToken = searchParams.get("invite");
+    if (inviteToken) {
+      await fetch("/api/invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inviteToken }),
+      });
     }
 
     router.push("/dashboard");
@@ -95,6 +105,11 @@ export function SignupForm() {
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {searchParams.get("invite") ? (
+        <p className="text-sm text-muted-foreground">
+          This account will join the invited organization after signup.
+        </p>
+      ) : null}
       <Button type="submit" className="h-11 w-full" disabled={isSubmitting}>
         {isSubmitting ? "Creating account..." : "Create account"}
       </Button>

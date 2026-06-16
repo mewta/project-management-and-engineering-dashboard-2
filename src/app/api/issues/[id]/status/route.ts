@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildStatusChangeMetadata } from "@/lib/activity";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   ApiError,
@@ -28,12 +29,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
 
     const canMoveIssue =
-      hasMinimumRole(membership.role, "ADMIN") ||
+      hasMinimumRole(membership.role, "DEVELOPER") ||
       issue.reporterId === userId ||
       issue.assigneeId === userId;
 
     if (!canMoveIssue) {
-      throw new ApiError(403, "Only admins, the reporter, or the assignee can move this issue");
+      throw new ApiError(403, "Only developers, admins, the reporter, or the assignee can move this issue");
     }
 
     if (!canTransitionIssueStatus(issue.status, payload.status)) {
@@ -64,11 +65,11 @@ export async function PATCH(request: Request, context: RouteContext) {
             actorId: userId,
             projectId: issue.projectId,
             issueId: issue.id,
-            metadata: {
+            metadata: buildStatusChangeMetadata({
               issueTitle: issue.title,
               fromStatus: issue.status,
               toStatus: payload.status,
-            },
+            }),
           },
         });
       }

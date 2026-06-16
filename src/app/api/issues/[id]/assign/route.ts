@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildAssignmentMetadata } from "@/lib/activity";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   ensureUserBelongsToOrganization,
@@ -52,11 +53,11 @@ export async function PATCH(request: Request, context: RouteContext) {
             actorId: userId,
             projectId: issue.projectId,
             issueId: issue.id,
-            metadata: {
+            metadata: buildAssignmentMetadata({
               issueTitle: issue.title,
               previousAssigneeId: issue.assigneeId,
               assigneeId: payload.assigneeId,
-            },
+            }),
           },
         });
       }

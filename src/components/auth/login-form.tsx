@@ -32,6 +32,23 @@ export function LoginForm() {
       return;
     }
 
+    const inviteToken = searchParams.get("invite");
+    if (inviteToken) {
+      const acceptResponse = await fetch("/api/invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inviteToken }),
+      });
+
+      if (!acceptResponse.ok) {
+        const body = (await acceptResponse.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setError(body?.error ?? "Signed in, but the invitation could not be accepted.");
+        return;
+      }
+    }
+
     router.push(searchParams.get("callbackUrl") ?? "/dashboard");
     router.refresh();
   }
@@ -67,6 +84,11 @@ export function LoginForm() {
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {searchParams.get("invite") ? (
+        <p className="text-sm text-muted-foreground">
+          Sign in with the invited email address to join the organization.
+        </p>
+      ) : null}
       <Button type="submit" className="h-11 w-full" disabled={isSubmitting}>
         {isSubmitting ? "Signing in..." : "Sign in"}
       </Button>

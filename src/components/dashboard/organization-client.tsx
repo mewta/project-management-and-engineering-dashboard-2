@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FolderPlus } from "lucide-react";
+import { ArrowLeft, FolderPlus, MailPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Organization = {
@@ -22,6 +22,29 @@ type Project = {
   _count: { issues: number };
 };
 
+type Member = {
+  id: string;
+  role: "OWNER" | "ADMIN" | "DEVELOPER" | "VIEWER";
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+};
+
+type Invitation = {
+  id: string;
+  email: string;
+  role: "ADMIN" | "DEVELOPER" | "VIEWER";
+  status: "PENDING" | "ACCEPTED" | "EXPIRED";
+  expiresAt: string;
+  invitedBy: {
+    id: string;
+    name: string;
+    email: string;
+  };
+};
+
 type OrganizationClientProps = {
   organizationId: string;
 };
@@ -29,25 +52,44 @@ type OrganizationClientProps = {
 export function OrganizationClient({ organizationId }: OrganizationClientProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Invitation["role"]>("DEVELOPER");
+  const [latestInviteLink, setLatestInviteLink] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
 
   const organization = useMemo(
     () => organizations.find((item) => item.id === organizationId),
     [organizations, organizationId],
   );
 
-  async function loadOrganization() {
-    const [orgResponse, projectResponse] = await Promise.all([
-      fetch("/api/organizations"),
-      fetch(`/api/projects?organizationId=${organizationId}`),
-    ]);
+  const currentRole = organization?.memberships[0]?.role ?? "VIEWER";
+  const canManageProjects = currentRole === "OWNER" || currentRole === "ADMIN";
+  const canInviteMembers = currentRole === "OWNER" || currentRole === "ADMIN";
+  const canManageRoles = currentRole === "OWNER" || currentRole === "ADMIN";
 
-    if (!orgResponse.ok || !projectResponse.ok) {
+  async function loadOrganization() {
+    const [orgResponse, projectResponse, memberResponse, invitationResponse] =
+      await Promise.all([
+        fetch("/api/organizations"),
+        fetch(`/api/projects?organizationId=${organizationId}`),
+        fetch(`/api/organizations/${organizationId}/members`),
+        fetch(`/api/organizations/${organizationId}/invitations?status=PENDING`),
+      ]);
+
+    if (
+      !orgResponse.ok ||
+      !projectResponse.ok ||
+      !memberResponse.ok ||
+      !invitationResponse.ok
+    ) {
       setError("Could not load organization data.");
       setIsLoading(false);
       return;
@@ -55,8 +97,15 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
 
     const orgBody = (await orgResponse.json()) as { organizations: Organization[] };
     const projectBody = (await projectResponse.json()) as { projects: Project[] };
+    const memberBody = (await memberResponse.json()) as { members: Member[] };
+    const invitationBody = (await invitationResponse.json()) as {
+      invitations: Invitation[];
+    };
+
     setOrganizations(orgBody.organizations);
     setProjects(projectBody.projects);
+    setMembers(memberBody.members);
+    setInvitations(invitationBody.invitations);
     setIsLoading(false);
   }
 
@@ -66,18 +115,31 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
     Promise.all([
       fetch("/api/organizations"),
       fetch(`/api/projects?organizationId=${organizationId}`),
+      fetch(`/api/organizations/${organizationId}/members`),
+      fetch(`/api/organizations/${organizationId}/invitations?status=PENDING`),
     ])
-      .then(async ([orgResponse, projectResponse]) => {
-        if (!orgResponse.ok || !projectResponse.ok) {
+      .then(async ([orgResponse, projectResponse, memberResponse, invitationResponse]) => {
+        if (
+          !orgResponse.ok ||
+          !projectResponse.ok ||
+          !memberResponse.ok ||
+          !invitationResponse.ok
+        ) {
           throw new Error("Could not load organization data.");
         }
 
         const orgBody = (await orgResponse.json()) as { organizations: Organization[] };
         const projectBody = (await projectResponse.json()) as { projects: Project[] };
+        const memberBody = (await memberResponse.json()) as { members: Member[] };
+        const invitationBody = (await invitationResponse.json()) as {
+          invitations: Invitation[];
+        };
 
         if (isActive) {
           setOrganizations(orgBody.organizations);
           setProjects(projectBody.projects);
+          setMembers(memberBody.members);
+          setInvitations(invitationBody.invitations);
           setIsLoading(false);
         }
       })
@@ -124,8 +186,62 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
     await loadOrganization();
   }
 
+  async function inviteMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setIsInviting(true);
+
+    const response = await fetch(`/api/organizations/${organizationId}/invitations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: inviteEmail,
+        role: inviteRole,
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string; inviteLink?: string }
+      | null;
+
+    if (!response.ok) {
+      setError(body?.error ?? "Could not send invitation.");
+      setIsInviting(false);
+      return;
+    }
+
+    setInviteEmail("");
+    setInviteRole("DEVELOPER");
+    setLatestInviteLink(body?.inviteLink ?? "");
+    setIsInviting(false);
+    setIsLoading(true);
+    await loadOrganization();
+  }
+
+  async function updateRole(member: Member, role: Member["role"]) {
+    setError("");
+
+    const response = await fetch(`/api/organizations/${organizationId}/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        membershipId: member.id,
+        role,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(body?.error ?? "Could not update role.");
+      return;
+    }
+
+    setIsLoading(true);
+    await loadOrganization();
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+    <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <aside className="space-y-6">
         <Link
           href="/dashboard"
@@ -143,7 +259,8 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
               onChange={(event) => setName(event.target.value)}
               required
               minLength={2}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={!canManageProjects}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
               placeholder="Core Platform"
             />
             <input
@@ -152,70 +269,155 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
               required
               minLength={2}
               maxLength={12}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={!canManageProjects}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
               placeholder="CORE"
             />
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={!canManageProjects}
+              className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
               placeholder="What this project owns"
             />
-            <Button type="submit" className="w-full" disabled={isCreating}>
+            <Button type="submit" className="w-full" disabled={isCreating || !canManageProjects}>
               <FolderPlus className="mr-2 size-4" />
               {isCreating ? "Creating..." : "Create project"}
             </Button>
           </form>
+        </section>
+
+        <section className="rounded-lg border bg-background p-5 shadow-sm">
+          <h2 className="text-base font-semibold">Invite member</h2>
+          <form onSubmit={inviteMember} className="mt-4 space-y-3">
+            <input
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              type="email"
+              required
+              disabled={!canInviteMembers}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+              placeholder="teammate@example.com"
+            />
+            <select
+              value={inviteRole}
+              onChange={(event) => setInviteRole(event.target.value as Invitation["role"])}
+              disabled={!canInviteMembers}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+            >
+              <option value="ADMIN">Admin</option>
+              <option value="DEVELOPER">Developer</option>
+              <option value="VIEWER">Viewer</option>
+            </select>
+            <Button type="submit" className="w-full" disabled={isInviting || !canInviteMembers}>
+              <MailPlus className="mr-2 size-4" />
+              {isInviting ? "Inviting..." : "Create invite link"}
+            </Button>
+          </form>
+          {latestInviteLink ? (
+            <p className="mt-3 break-all text-xs text-muted-foreground">{latestInviteLink}</p>
+          ) : null}
           {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
         </section>
       </aside>
 
-      <section className="rounded-lg border bg-background p-5 shadow-sm">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Organization</p>
-            <h2 className="text-xl font-semibold">
-              {organization?.name ?? (isLoading ? "Loading..." : "Organization")}
-            </h2>
-          </div>
-          {organization ? (
+      <section className="space-y-6">
+        <section className="rounded-lg border bg-background p-5 shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Organization</p>
+              <h2 className="text-xl font-semibold">
+                {organization?.name ?? (isLoading ? "Loading..." : "Organization")}
+              </h2>
+            </div>
             <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
-              {organization.memberships[0]?.role ?? "MEMBER"}
+              {currentRole}
             </span>
-          ) : null}
-        </div>
+          </div>
 
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading projects...</p>
-        ) : projects.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No projects yet. Create one to start tracking issues.
-          </p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {projects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="rounded-lg border p-4 transition-colors hover:bg-muted/60"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="font-medium">
-                      {project.key} · {project.name}
-                    </h3>
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                      {project.description || "No description"}
-                    </p>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading projects...</p>
+          ) : projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No projects yet. Create one to start tracking issues.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="rounded-lg border p-4 transition-colors hover:bg-muted/60"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-medium">
+                        {project.key} · {project.name}
+                      </h3>
+                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                        {project.description || "No description"}
+                      </p>
+                    </div>
+                    <span className="rounded-md bg-muted px-2 py-1 text-xs">
+                      {project._count.issues} issues
+                    </span>
                   </div>
-                  <span className="rounded-md bg-muted px-2 py-1 text-xs">
-                    {project._count.issues} issues
-                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-lg border bg-background p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <Users className="size-5" />
+            <h2 className="text-base font-semibold">Team members</h2>
+          </div>
+          <div className="space-y-3">
+            {members.map((member) => (
+              <div
+                key={member.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+              >
+                <div>
+                  <p className="font-medium">{member.user.name}</p>
+                  <p className="text-sm text-muted-foreground">{member.user.email}</p>
                 </div>
-              </Link>
+                <select
+                  value={member.role}
+                  disabled={!canManageRoles || member.role === "OWNER"}
+                  onChange={(event) =>
+                    void updateRole(member, event.target.value as Member["role"])
+                  }
+                  className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                >
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="DEVELOPER">DEVELOPER</option>
+                  <option value="VIEWER">VIEWER</option>
+                  {member.role === "OWNER" ? <option value="OWNER">OWNER</option> : null}
+                </select>
+              </div>
             ))}
           </div>
-        )}
+        </section>
+
+        <section className="rounded-lg border bg-background p-5 shadow-sm">
+          <h2 className="text-base font-semibold">Pending invitations</h2>
+          {invitations.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">No pending invitations.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {invitations.map((invitation) => (
+                <div key={invitation.id} className="rounded-lg border p-3">
+                  <p className="font-medium">{invitation.email}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {invitation.role} · invited by {invitation.invitedBy.name}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
     </div>
   );

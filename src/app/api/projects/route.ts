@@ -33,6 +33,22 @@ export async function GET(request: Request) {
             id: true,
             name: true,
             slug: true,
+            memberships: {
+              select: {
+                id: true,
+                role: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "asc",
+              },
+            },
           },
         },
         _count: {

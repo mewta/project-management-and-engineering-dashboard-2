@@ -10,7 +10,14 @@ datasource db {
 enum MembershipRole {
   OWNER
   ADMIN
-  MEMBER
+  DEVELOPER
+  VIEWER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
 }
 
 enum IssueStatus {
@@ -37,33 +44,35 @@ enum ActivityAction {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  passwordHash  String
-  image         String?
-  memberships   Membership[]
-  assignedIssues Issue[]       @relation("IssueAssignee")
-  createdIssues Issue[]        @relation("IssueReporter")
-  comments      Comment[]
-  activities    ActivityLog[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  name            String
+  email           String         @unique
+  passwordHash    String
+  image           String?
+  memberships     Membership[]
+  assignedIssues  Issue[]        @relation("IssueAssignee")
+  createdIssues   Issue[]        @relation("IssueReporter")
+  comments        Comment[]
+  activities      ActivityLog[]
+  invitationsSent Invitation[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model Organization {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  memberships Membership[]
-  projects    Project[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  memberships  Membership[]
+  invitations  Invitation[]
+  projects     Project[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model Membership {
   id             String         @id @default(cuid())
-  role           MembershipRole @default(MEMBER)
+  role           MembershipRole @default(DEVELOPER)
   userId         String
   organizationId String
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -98,6 +107,7 @@ model Issue {
   status      IssueStatus   @default(TODO)
   priority    IssuePriority @default(MEDIUM)
   dueDate     DateTime?
+  labels      String[]      @default([])
   projectId   String
   assigneeId  String?
   reporterId  String
@@ -112,6 +122,24 @@ model Issue {
   @@index([projectId, status])
   @@index([projectId, priority])
   @@index([assigneeId])
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  email          String
+  organizationId String
+  role           MembershipRole
+  token          String           @unique
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  invitedById    String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User             @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId, status])
+  @@index([email, status])
 }
 
 model Comment {

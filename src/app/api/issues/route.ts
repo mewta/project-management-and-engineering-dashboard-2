@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildIssueCreatedMetadata } from "@/lib/activity";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   ensureUserBelongsToOrganization,
   handleApiError,
   requireProjectAccess,
+  requireProjectRole,
   requireUserId,
 } from "@/lib/api";
 import { createIssueSchema, issueFilterSchema } from "@/lib/validators";
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
       priority: searchParams.get("priority") ?? undefined,
       assigneeId: searchParams.get("assigneeId") ?? undefined,
       q: searchParams.get("q") ?? undefined,
+      label: searchParams.get("label") ?? undefined,
     });
 
     if (filters.projectId) {
@@ -31,6 +34,7 @@ export async function GET(request: Request) {
         status: filters.status,
         priority: filters.priority,
         assigneeId: filters.assigneeId,
+        labels: filters.label ? { has: filters.label } : undefined,
         OR: filters.q
           ? [
               { title: { contains: filters.q, mode: "insensitive" } },
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
   try {
     const userId = await requireUserId();
     const payload = createIssueSchema.parse(await request.json());
-    const project = await requireProjectAccess(userId, payload.projectId);
+    const { project } = await requireProjectRole(userId, payload.projectId, "DEVELOPER");
 
     if (payload.assigneeId) {
       await ensureUserBelongsToOrganization(
@@ -104,6 +108,7 @@ export async function POST(request: Request) {
           priority: payload.priority,
           status: payload.status,
           dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+          labels: payload.labels ?? [],
           projectId: payload.projectId,
           assigneeId: payload.assigneeId,
           reporterId: userId,
@@ -132,11 +137,11 @@ export async function POST(request: Request) {
           actorId: userId,
           projectId: payload.projectId,
           issueId: createdIssue.id,
-          metadata: {
+          metadata: buildIssueCreatedMetadata({
             issueTitle: createdIssue.title,
             priority: createdIssue.priority,
             status: createdIssue.status,
-          },
+          }),
         },
       });
 

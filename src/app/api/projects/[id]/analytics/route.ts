@@ -1,14 +1,11 @@
-import { IssuePriority, IssueStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildProjectAnalytics } from "@/lib/analytics";
 import { handleApiError, requireProjectAccess, requireUserId } from "@/lib/api";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-const statusValues: IssueStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
-const priorityValues: IssuePriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
@@ -40,7 +37,10 @@ export async function GET(_request: Request, context: RouteContext) {
         }),
         prisma.issue.groupBy({
           by: ["assigneeId"],
-          where: { projectId: id },
+          where: {
+            projectId: id,
+            status: { not: "DONE" },
+          },
           _count: { _all: true },
         }),
       ]);
@@ -54,38 +54,15 @@ export async function GET(_request: Request, context: RouteContext) {
       select: { id: true, name: true, email: true },
     });
 
-    const assigneeById = new Map(assignees.map((assignee) => [assignee.id, assignee]));
-
-    const statusCountByKey = new Map(
-      byStatus.map((item) => [item.status, item._count._all]),
-    );
-    const priorityCountByKey = new Map(
-      byPriority.map((item) => [item.priority, item._count._all]),
-    );
-
-    const analytics = {
+    const analytics = buildProjectAnalytics({
       totalIssues,
       completedIssues,
       overdueIssues,
-      issuesByStatus: statusValues.map((status) => ({
-        status,
-        count: statusCountByKey.get(status) ?? 0,
-      })),
-      issuesByPriority: priorityValues.map((priority) => ({
-        priority,
-        count: priorityCountByKey.get(priority) ?? 0,
-      })),
-      memberWorkload: workload.map((item) => {
-        const assignee = item.assigneeId ? assigneeById.get(item.assigneeId) : null;
-
-        return {
-          assigneeId: item.assigneeId,
-          name: assignee?.name ?? "Unassigned",
-          email: assignee?.email ?? null,
-          count: item._count._all,
-        };
-      }),
-    };
+      byStatus,
+      byPriority,
+      workload,
+      assignees,
+    });
 
     return NextResponse.json({ analytics });
   } catch (error) {
