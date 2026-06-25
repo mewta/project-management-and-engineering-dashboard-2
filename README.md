@@ -1,152 +1,269 @@
 # DevBoard
 
-Real-time project management and engineering dashboard for small engineering teams.
+DevBoard is a full-stack project management and engineering dashboard built for small software teams. It combines issue tracking, sprint planning, team collaboration, realtime updates, workload analytics, automated reports, and public roadmaps in one application.
 
-## Problem Statement
+The project is designed as a practical alternative to heavyweight tools for teams that need clear ownership, useful engineering metrics, and fast day-to-day workflows.
 
-Small engineering teams need a lightweight project management tool to track issues, assign work, monitor sprint progress, and collaborate in real time without the overhead of heavier tools like Jira.
+## Core Features
 
-DevBoard lets teams create organizations, manage projects, assign issues, track sprint progress, comment on tasks, and view analytics from a clean dashboard.
+### Authentication and Access Control
 
-## Tech Stack
+- Email and password authentication with NextAuth.js.
+- Protected dashboard, organization, project, and issue routes.
+- Organization-level role-based access control.
+- Four membership roles: `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER`.
+- Server-side authorization checks for every protected API operation.
+- Role-aware controls for organization management, project creation, issue updates, assignments, comments, reports, and sprint administration.
 
-- Frontend: Next.js, TypeScript, Tailwind CSS, shadcn/ui, Recharts
-- Backend: Next.js API routes, Prisma ORM
-- Database: PostgreSQL
-- Auth: NextAuth.js credentials provider
-- Realtime: Socket.io
+### Organizations and Team Management
 
-## Five-Day Implementation Plan
+- Create and manage multiple organizations.
+- Invite users through secure invitation links.
+- Accept invitations during signup or login.
+- View organization members and their current roles.
+- Update member roles based on the current user's permissions.
+- Keep projects, memberships, invitations, and reports isolated by organization.
 
-### Day 1: Database, Auth, Core Backend
+### Projects and Engineering Workspaces
 
-1. Design database schema.
-2. Implement Prisma models.
-3. Create credentials authentication with NextAuth.
-4. Build organization and project APIs.
-5. Build issue APIs.
-6. Verify APIs with HTTP requests or Postman.
+- Create projects with a name, key, and description.
+- View all accessible projects from the dashboard.
+- Open a dedicated workspace for each project.
+- Track issue totals and project activity.
+- Maintain organization membership checks across every project query.
 
-Implemented Day 1 endpoints:
+### Issue Tracking and Kanban Board
 
-- `POST /api/auth/signup`
-- `POST /api/organizations`
-- `GET /api/organizations`
-- `POST /api/projects`
-- `GET /api/projects`
-- `POST /api/issues`
-- `GET /api/issues`
+- Create issues with a title, description, status, priority, due date, estimate, labels, and assignee.
+- Organize work into `TODO`, `IN_PROGRESS`, `IN_REVIEW`, and `DONE` columns.
+- Move issues through validated status transitions.
+- Prevent blocked issues from moving to `DONE`.
+- Assign and reassign issues to organization members.
+- Filter issues by status, assignee, label, blocked state, and search query.
+- Display overdue work, estimates, comment totals, labels, and blockers directly on the project board.
 
-### Day 2: Backend Business Logic
+### Comments, Activity, and Collaboration
 
-1. Add role-based access control.
-2. Add issue status transition rules.
-3. Add assignment rules.
-4. Generate activity logs for every meaningful change.
-5. Add comments APIs.
-6. Add search and filter APIs.
+- Add comments to issues.
+- Record meaningful project actions in an activity feed.
+- Track issue creation, status changes, assignments, comments, dependencies, sprint changes, and weekly report generation.
+- Show issue and project history with the user responsible for each action.
+- Keep activity records scoped to the correct project and issue.
 
-Target endpoints:
+### Issue Dependencies and Blockers
 
-- `PATCH /api/issues/:id/status`
-- `PATCH /api/issues/:id/assign`
-- `POST /api/issues/:id/comments`
-- `GET /api/issues/:id/comments`
-- `GET /api/projects/:id/activity`
-- `GET /api/projects/:id/issues?status=TODO&priority=HIGH`
+- Mark one issue as blocked by another issue.
+- View both incoming blockers and issues that depend on the selected issue.
+- Prevent duplicate dependency relationships.
+- Detect and reject circular dependency chains.
+- Block the `DONE` transition until every required dependency is completed.
+- Add and remove dependencies with realtime updates.
 
-Implemented Day 2 behavior:
+### Realtime Collaboration
 
-- Organization RBAC with `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER` roles.
-- Project creation restricted to owners/admins.
-- Issue creation restricted to developers and above.
-- Issue assignment restricted to owners/admins.
-- Status transitions restricted to developers and above, reporters, or assignees.
-- Comment creation restricted to developers and above.
-- Activity log generation for status changes, assignments, comments, projects, and issues.
-- Issue filters for status, priority, assignee, label, and search query.
+- Socket.io project rooms keep updates scoped to the active project.
+- Live events are sent for issue creation, status changes, assignments, comments, dependency changes, reports, and sprint updates.
+- Project pages refresh relevant data when another team member makes a change.
+- A live connection indicator shows the current realtime state.
+- API routes can publish events through an authenticated internal realtime bridge.
 
-### Day 3: Frontend MVP
+### Global Command Palette
 
-1. Build `/login` and `/signup`.
-2. Build `/dashboard`.
-3. Build organization and project views.
-4. Build issue creation form.
-5. Build Kanban board.
-6. Build issue detail and comments UI.
-7. Build activity feed.
+- Open the command palette from authenticated pages with `Command + K` or `Ctrl + K`.
+- Navigate to projects, issues, organization settings, and other common destinations.
+- Search projects, issues, and members through an authorization-aware search endpoint.
+- Run contextual issue commands such as changing status, assigning a member, and adding labels.
+- Use nested command pages for multi-step actions.
+- Register commands through a typed command registry instead of hardcoding actions into the palette UI.
 
-Implemented Day 3 behavior:
+### Project Analytics
 
-- Working `/login` and `/signup` pages backed by NextAuth credentials.
-- Protected `/dashboard` page with organization creation, organization list, and project list.
-- Protected `/organizations/:orgId` page with project creation and project list.
-- Protected `/projects/:projectId` page with issue creation, Kanban board, issue detail panel, comments, and activity feed.
-- Loading, empty, and error states for the main frontend flows.
-- Browser-verified login, dashboard loading, project board rendering, and comment creation.
+- View total, completed, and overdue issue counts.
+- Compare issue distribution by status and priority.
+- Visualize project metrics with Recharts.
+- Keep analytics queries restricted to users with project access.
 
-### Day 4: Realtime and Analytics
+### Workload Analytics and Overload Detection
 
-1. Add Socket.io server.
-2. Broadcast issue status updates.
-3. Broadcast new comments.
-4. Add project analytics API.
-5. Visualize analytics with Recharts.
+- Calculate workload for every project member.
+- Measure open issues, completed issues, overdue work, blocked work, urgent work, high-priority work, and estimated hours.
+- Produce a workload score for each member.
+- Classify members as `UNDERLOADED`, `BALANCED`, or `OVERLOADED`.
+- Filter workload views to all work, open work, or overdue work.
+- Show team-level totals for open, blocked, overdue, and overloaded work.
 
-Analytics should include total issues, completed issues, overdue issues, issues by status, issues by priority, and member workload.
+### Weekly Team Reports
 
-Implemented Day 4 behavior:
+- Generate weekly reports for a project.
+- Summarize created issues, completed issues, review activity, comments, overdue work, blockers, workload, priorities, statuses, and top contributors.
+- Store generated reports in PostgreSQL.
+- Run report generation inline when Redis is unavailable.
+- Use BullMQ when Redis is configured.
+- Publish realtime events after a report is generated.
 
-- Custom Next.js HTTP server with Socket.io support.
-- Project room subscriptions with `project:join` and `project:leave`.
-- Realtime broadcasts for issue creation, issue status/assignment updates, and comments.
-- Internal authenticated realtime bridge used by API routes after database mutations.
-- `GET /api/projects/:id/analytics` for project dashboard metrics.
-- Recharts visualizations for issues by status, issues by priority, and member workload.
-- Project page live status indicator and automatic refresh on realtime events.
+### Public Read-Only Roadmaps
 
-## Team Collaboration Features
+- Mark a project as public from the authenticated project workspace.
+- Generate a stable, non-sequential public URL.
+- Disable and re-enable the public roadmap without changing its existing link.
+- Display a public Kanban-style roadmap at `/p/[slug]`.
+- Allow visitors to view project progress without creating an account.
+- Return only an explicit allow-list of public fields.
+- Never expose comments, member identities, emails, activity logs, organization data, or internal notes.
+- Protect the unauthenticated endpoint with caching and rate limiting.
 
-- Organization member management with role updates.
-- Invitation flow with invite links, token validation, and acceptance on login/signup.
-- Issue assignment to team members during issue creation and from the issue details panel.
-- Issue labels for filtering and board context.
-- Member workload analytics based on open assigned issues.
+### Read-Only Demo Mode
 
-### Day 5: Polish, Testing, Deployment
+- Enter a populated workspace through the `Try Demo` button without completing a signup form.
+- Use a deterministic demo organization containing three projects, 30 issues, comments, dependencies, reports, sprint history, and analytics data.
+- Show a persistent banner explaining that the demo is read-only.
+- Block every demo mutation on the server, including direct API requests.
+- Return clear user-facing messages when a demo user attempts to change data.
+- Reset only the fixed demo organization through a scheduled BullMQ job every six hours when Redis is available.
+- Recreate the same demo dataset safely with:
 
-1. Add clean loading, empty, and error states.
-2. Add backend tests for RBAC, status updates, activity logs, and analytics.
-3. Finalize README and screenshots.
-4. Deploy to Vercel.
-5. Use Supabase PostgreSQL for production.
+```bash
+npm run demo:seed
+```
 
-Implemented Day 5 behavior:
+### Sprint Planning
 
-- Vitest test setup for backend business logic.
-- Tests for RBAC role hierarchy.
-- Tests for issue status transition rules.
-- Tests for activity log metadata builders.
-- Tests for analytics aggregation shaping.
-- GitHub Actions CI for lint, typecheck, tests, and build.
-- Validation script for local pre-push checks.
-- Deployment notes for Supabase PostgreSQL and realtime hosting.
+- Create planned sprints with start and end dates.
+- Start one active sprint per project.
+- Complete active sprints through validated lifecycle transitions.
+- Assign issues to a planned or active sprint.
+- Move issues back to the backlog.
+- Record issue additions and removals in the activity log.
+- Publish sprint scope and lifecycle changes through realtime events.
+
+### Sprint Burndown
+
+- Store one daily `SprintSnapshot` for each sprint.
+- Measure work by issue count.
+- Track total scope, remaining work, and completed work.
+- Rebuild each snapshot by replaying sprint membership and issue status events from `ActivityLog`.
+- Correctly represent reopened issues and scope changes during a sprint.
+- Upsert snapshots by sprint and UTC date so scheduled jobs are safe to rerun.
+- Compare the actual remaining work with a calculated ideal line.
+- Preserve visible gaps when a daily snapshot is missing.
+- Generate a snapshot manually for testing or newly seeded data.
+- Automatically create the final snapshot when a sprint is completed.
+
+### Velocity Analytics
+
+- Display completed work across recent completed sprints.
+- Use each sprint's final snapshot as the source of completed and total scope values.
+- Calculate average project velocity.
+- Show completed work with a Recharts bar chart and average reference line.
+
+## Technology Stack
+
+### Frontend
+
+- Next.js App Router
+- React
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Lucide icons
+- Recharts
+
+### Backend
+
+- Next.js Route Handlers
+- Prisma ORM
+- PostgreSQL
+- NextAuth.js
+- Zod validation
+- Socket.io
+- BullMQ
+- Redis
+
+### Testing and Quality
+
+- Vitest
+- ESLint
+- TypeScript type checking
+- Prisma migrations
+- Production build validation
+
+## Architecture
+
+DevBoard uses the Next.js App Router for both the user interface and HTTP API. Prisma provides typed database access to PostgreSQL. NextAuth.js manages authenticated sessions, while shared authorization helpers enforce organization and project access inside API routes.
+
+The custom Node server starts Next.js and Socket.io together. Connected clients join project-specific rooms, and successful mutations publish events only to the affected project.
+
+BullMQ handles background work when `REDIS_URL` is configured. The current worker supports weekly report jobs, scheduled demo resets, and daily sprint snapshots. Operations that do not require scheduling can fall back to inline execution when Redis is unavailable.
+
+Sprint analytics use `ActivityLog` as the historical source of truth. Daily snapshots are derived by replaying issue status changes and sprint scope events instead of relying only on the issue's current state.
+
+## Main Data Models
+
+- `User`: authentication identity and demo-account state.
+- `Organization`: top-level workspace containing members and projects.
+- `Membership`: connects users to organizations with an assigned role.
+- `Invitation`: secure organization invitation with status and expiration.
+- `Project`: engineering workspace containing issues, sprints, reports, and activity.
+- `Issue`: trackable work item with status, priority, labels, estimate, ownership, and sprint assignment.
+- `Comment`: issue discussion written by an authenticated user.
+- `IssueDependency`: directed blocker relationship between two issues.
+- `ActivityLog`: historical record used by activity feeds, reports, and sprint replay.
+- `Sprint`: planned, active, or completed delivery period.
+- `SprintSnapshot`: daily scope and completion state for burndown and velocity.
+- `WeeklyReport`: stored project summary for a specific week.
+
+## Project Structure
+
+```text
+prisma/
+  migrations/             Database migrations
+  schema.prisma           Prisma models, enums, relations, and indexes
+  seed-demo.ts            Deterministic demo workspace seed
+
+src/
+  app/                    App Router pages and API routes
+  commands/               Typed command palette definitions
+  components/             Dashboard, project, layout, and UI components
+  lib/                    Auth, Prisma, analytics, queues, realtime, and business logic
+  types/                  Shared TypeScript declarations
+  workers/                BullMQ worker entry point
+
+tests/
+  lib/                    Unit tests for core business rules
+
+server.mjs                Custom Next.js and Socket.io server
+```
 
 ## Local Setup
 
-Install dependencies:
+### Requirements
+
+- Node.js
+- npm
+- PostgreSQL
+- Redis is optional but required for scheduled BullMQ jobs
+
+### Install Dependencies
 
 ```bash
 npm install
 ```
 
-Create `.env`:
+### Configure Environment Variables
 
-```bash
-cp .env.example .env
+Create a `.env` file:
+
+```env
+DATABASE_URL="postgresql://YOUR_DATABASE_USER@localhost:5432/devboard?schema=public"
+NEXTAUTH_SECRET="replace-with-a-long-random-secret"
+NEXTAUTH_URL="http://localhost:3000"
+REALTIME_SECRET="replace-with-a-second-long-random-secret"
+REDIS_URL="redis://localhost:6379"
 ```
 
-For local PostgreSQL on macOS with Homebrew:
+`REDIS_URL` can be omitted when testing the core application without scheduled background jobs.
+
+### Create a Local PostgreSQL Database on macOS
 
 ```bash
 brew install postgresql@16
@@ -154,105 +271,72 @@ brew services start postgresql@16
 /opt/homebrew/opt/postgresql@16/bin/createdb devboard
 ```
 
-Update `DATABASE_URL` in `.env` if your local database user differs:
-
-```bash
-DATABASE_URL="postgresql://YOUR_MAC_USERNAME@localhost:5432/devboard?schema=public"
-NEXTAUTH_SECRET="replace-with-a-long-random-secret"
-NEXTAUTH_URL="http://localhost:3000"
-```
-
-Apply migrations:
+### Apply Database Migrations
 
 ```bash
 npm run db:migrate
 ```
 
-Run the app:
-
-```bash
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-## Demo Mode
-
-Create or reset the deterministic read-only demo workspace:
+### Seed the Demo Workspace
 
 ```bash
 npm run demo:seed
 ```
 
-The seed creates `DevBoard Demo Co` with three projects, 30 issues, comments,
-dependencies, activity history, weekly reports, six completed sprints, three active
-sprints, and historical burndown snapshots. The landing and login pages expose a
-passwordless `Try Demo` action.
-
-When `REDIS_URL` is configured, the existing BullMQ worker also schedules a demo reset
-every six hours:
-
-```bash
-npm run worker:reports
-```
-
-The reset deletes only the organization with the fixed demo organization ID before
-recreating its data. Demo users remain server-enforced read-only across every mutating
-API route.
-
-## Sprint Analytics
-
-Feature 4 adds sprint planning, activity-derived daily snapshots, burndown charts,
-and project velocity:
-
-- `GET/POST /api/projects/:id/sprints`
-- `PATCH /api/sprints/:sprintId`
-- `PATCH /api/issues/:id/sprint`
-- `POST /api/sprints/:sprintId/snapshot/generate`
-- `GET /api/sprints/:sprintId/burndown`
-- `GET /api/projects/:projectId/velocity?limit=6`
-
-Sprint scope additions, removals, and issue status changes are stored in
-`ActivityLog`. The snapshot generator replays that history through the end of each
-UTC day and upserts one `SprintSnapshot` per sprint/date. With `REDIS_URL` configured,
-the BullMQ worker schedules active-sprint snapshots daily at `00:05 UTC`.
-
-## VS Code Workflow
-
-Open the project:
-
-```bash
-cd "/Users/mewta/Documents/project management and engineering dashboard 2"
-code .
-```
-
-In VS Code, open `Terminal -> New Terminal`, then run:
+### Start the Application
 
 ```bash
 npm run dev
 ```
 
-Use:
+Open:
 
 ```text
 http://localhost:3000
 ```
 
-Do not use `127.0.0.1` for auth testing unless you also update `NEXTAUTH_URL`.
+Use the same hostname configured in `NEXTAUTH_URL` when testing authentication.
 
-## API Smoke Test Flow
+## Background Workers
 
-Create a user:
+Start the BullMQ worker:
 
 ```bash
-curl -X POST http://localhost:3000/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Demo User","email":"demo@devboard.local","password":"password123"}'
+npm run worker:reports
 ```
 
-Then sign in through `/login` once the frontend is built, or use Postman/Thunder Client with NextAuth cookies during backend testing.
+When Redis is configured, this process handles:
+
+- Weekly project report generation
+- Demo workspace resets every six hours
+- Active sprint snapshots every day at `00:05 UTC`
+
+## Available Scripts
+
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run typecheck
+npm test
+npm run validate
+npm run db:generate
+npm run db:migrate
+npm run db:studio
+npm run demo:seed
+npm run worker:reports
+```
 
 ## Validation
+
+Run the complete validation pipeline:
+
+```bash
+npm run validate
+```
+
+Or run each check separately:
 
 ```bash
 npm run lint
@@ -261,21 +345,29 @@ npm test
 npm run build
 ```
 
-Or run the full local check:
+## Deployment
 
-```bash
-npm run validate
-```
+Use a managed PostgreSQL provider such as Supabase for production and configure:
 
-## Deployment Notes
-
-Use Supabase PostgreSQL for production:
-
-```bash
-DATABASE_URL="your-supabase-connection-string"
-NEXTAUTH_SECRET="your-production-secret"
+```env
+DATABASE_URL="your-production-postgresql-connection-string"
+NEXTAUTH_SECRET="your-production-auth-secret"
 NEXTAUTH_URL="https://your-production-domain"
 REALTIME_SECRET="your-production-realtime-secret"
+REDIS_URL="your-production-redis-connection-string"
 ```
 
-The app uses a custom Node server for Socket.io. For a full realtime production demo, deploy this repo to a Node server host such as Render, Railway, or Fly.io. If deploying the core Next.js app to Vercel, use a hosted realtime provider or separate Socket.io server for websocket features.
+The application uses a custom Node server for Socket.io. Deploy the complete realtime application to a Node-compatible host such as Railway, Render, or Fly.io.
+
+If the Next.js application is deployed to Vercel, run Socket.io and BullMQ workers as separate services or replace Socket.io with a hosted realtime provider. Scheduled jobs also require a persistent worker process and Redis.
+
+## Security Notes
+
+- Protected APIs verify the authenticated user on the server.
+- Organization and project membership checks are applied before returning private data.
+- Mutating routes enforce role requirements and demo-account restrictions.
+- Public roadmap data is fetched through a separate query path with explicit Prisma field selection.
+- Private comments, user emails, activity records, and organization details are never included in public roadmap responses.
+- Demo reset operations are always restricted to the fixed demo organization ID.
+- Issue dependency creation rejects circular relationships.
+- Sprint snapshot generation uses idempotent database upserts.
