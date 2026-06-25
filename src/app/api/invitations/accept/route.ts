@@ -1,12 +1,12 @@
 import { InvitationStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ApiError, handleApiError, requireUserId } from "@/lib/api";
+import { ApiError, handleApiError, requireWritableUserId } from "@/lib/api";
 import { acceptInvitationSchema } from "@/lib/validators";
 
 export async function POST(request: Request) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const payload = acceptInvitationSchema.parse(await request.json());
     const user = await prisma.user.findUnique({
       where: { id: userId },

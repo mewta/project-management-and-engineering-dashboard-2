@@ -1,11 +1,12 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, jsonError } from "@/lib/api";
+import { assertNoDemoSession, handleApiError, jsonError } from "@/lib/api";
 import { signupSchema } from "@/lib/validators";
 
 export async function POST(request: Request) {
   try {
+    await assertNoDemoSession();
     const payload = signupSchema.parse(await request.json());
 
     const existingUser = await prisma.user.findUnique({

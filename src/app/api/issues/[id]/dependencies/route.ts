@@ -10,6 +10,7 @@ import {
   requireIssueAccess,
   requireProjectRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { createIssueDependencySchema } from "@/lib/validators";
 
@@ -33,7 +34,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id: issueId } = await context.params;
     const payload = createIssueDependencySchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, issueId);

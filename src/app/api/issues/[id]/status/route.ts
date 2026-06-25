@@ -9,7 +9,7 @@ import {
   hasMinimumRole,
   requireIssueAccess,
   requireOrganizationMembership,
-  requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { canTransitionIssueStatus } from "@/lib/issues";
 import { updateIssueStatusSchema } from "@/lib/validators";
@@ -20,7 +20,7 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id } = await context.params;
     const payload = updateIssueStatusSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);

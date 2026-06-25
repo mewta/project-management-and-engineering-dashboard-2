@@ -3,6 +3,7 @@
 import { CircleDot, ListPlus, Tags } from "lucide-react";
 import type { Command } from "@/components/command-palette/types";
 import { searchCommandData, stripCommandTerms } from "@/commands/search";
+import { getMutationErrorMessage } from "@/lib/demo-client";
 
 type IssueStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
@@ -116,7 +117,9 @@ export function createMoveIssueCommand({
             const body = (await response.json().catch(() => null)) as
               | { error?: string }
               | null;
-            throw new Error(body?.error ?? "Could not move issue");
+            throw new Error(
+              getMutationErrorMessage(body?.error, "Could not move issue"),
+            );
           }
 
           notify(`Issue moved to ${statusLabels[nextStatus]}`);
@@ -176,7 +179,9 @@ export function createAddLabelCommand({
             const body = (await response.json().catch(() => null)) as
               | { error?: string }
               | null;
-            throw new Error(body?.error ?? "Could not add label");
+            throw new Error(
+              getMutationErrorMessage(body?.error, "Could not add label"),
+            );
           }
 
           notify(`Added label "${label}"`);

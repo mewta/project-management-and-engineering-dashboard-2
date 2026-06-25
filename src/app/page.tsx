@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DemoLoginButton } from "@/components/auth/demo-login-button";
 
 export default function Home() {
   return (
@@ -27,6 +28,7 @@ export default function Home() {
           >
             Sign in
           </Link>
+          <DemoLoginButton />
         </div>
       </section>
     </main>

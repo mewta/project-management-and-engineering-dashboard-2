@@ -7,7 +7,7 @@ import {
   handleApiError,
   requireIssueAccess,
   requireProjectRole,
-  requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { assignIssueSchema } from "@/lib/validators";
 
@@ -17,7 +17,7 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id } = await context.params;
     const payload = assignIssueSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);

@@ -1,4 +1,10 @@
-import { InvitationStatus, IssuePriority, IssueStatus, MembershipRole } from "@prisma/client";
+import {
+  InvitationStatus,
+  IssuePriority,
+  IssueStatus,
+  MembershipRole,
+  SprintStatus,
+} from "@prisma/client";
 import { z } from "zod";
 
 export const signupSchema = z.object({
@@ -104,4 +110,23 @@ export const updateIssueLabelsSchema = z.object({
 
 export const updateProjectPublicLinkSchema = z.object({
   enabled: z.boolean(),
+});
+
+export const createSprintSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
+  })
+  .refine(({ startDate, endDate }) => new Date(endDate) >= new Date(startDate), {
+    message: "Sprint end date must be on or after its start date",
+    path: ["endDate"],
+  });
+
+export const updateSprintSchema = z.object({
+  status: z.nativeEnum(SprintStatus),
+});
+
+export const updateIssueSprintSchema = z.object({
+  sprintId: z.string().min(1).nullable(),
 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { enqueueWeeklyReport } from "@/lib/queue";
-import { handleApiError, requireProjectRole, requireUserId } from "@/lib/api";
+import { handleApiError, requireProjectRole, requireWritableUserId } from "@/lib/api";
 import { generateWeeklyReportSchema } from "@/lib/validators";
 
 type RouteContext = {
@@ -9,7 +9,7 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id } = await context.params;
     const payload = generateWeeklyReportSchema.parse(await request.json().catch(() => ({})));
     const { project } = await requireProjectRole(userId, id, "ADMIN");

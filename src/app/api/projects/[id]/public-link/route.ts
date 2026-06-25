@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import {
   handleApiError,
   requireProjectRole,
-  requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { publicRoadmapCacheTag } from "@/lib/public-roadmap";
 import { updateProjectPublicLinkSchema } from "@/lib/validators";
@@ -16,7 +16,7 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id } = await context.params;
     const payload = updateProjectPublicLinkSchema.parse(await request.json());
     const { project } = await requireProjectRole(userId, id, "ADMIN");

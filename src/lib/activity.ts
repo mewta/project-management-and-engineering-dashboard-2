@@ -48,6 +48,41 @@ export function buildAssignmentMetadata({
   };
 }
 
+export function buildSprintScopeMetadata({
+  issueTitle,
+  sprintId,
+  sprintName,
+  statusAtChange,
+}: {
+  issueTitle: string;
+  sprintId: string;
+  sprintName: string;
+  statusAtChange: IssueStatus;
+}) {
+  return {
+    issueTitle,
+    sprintId,
+    sprintName,
+    statusAtChange,
+  };
+}
+
+export function buildSprintMetadata({
+  sprintId,
+  sprintName,
+  status,
+}: {
+  sprintId: string;
+  sprintName: string;
+  status: string;
+}) {
+  return {
+    sprintId,
+    sprintName,
+    status,
+  };
+}
+
 export function buildCommentCreatedMetadata({
   issueTitle,
   commentId,

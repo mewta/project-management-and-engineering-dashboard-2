@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { handleApiError, requireUserId } from "@/lib/api";
+import { handleApiError, requireUserId, requireWritableUserId } from "@/lib/api";
 import { createOrganizationSchema } from "@/lib/validators";
 
 function slugify(name: string) {
@@ -46,7 +46,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const payload = createOrganizationSchema.parse(await request.json());
 
     const organization = await prisma.$transaction(async (tx) => {

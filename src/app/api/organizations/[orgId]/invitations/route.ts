@@ -8,6 +8,7 @@ import {
   requireOrganizationMembership,
   requireOrganizationRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { invitationFilterSchema, inviteMemberSchema } from "@/lib/validators";
 
@@ -51,7 +52,7 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { orgId } = await context.params;
     const payload = inviteMemberSchema.parse(await request.json());
 

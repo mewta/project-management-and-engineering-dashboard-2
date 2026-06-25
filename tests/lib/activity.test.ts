@@ -3,6 +3,7 @@ import {
   buildAssignmentMetadata,
   buildCommentCreatedMetadata,
   buildIssueCreatedMetadata,
+  buildSprintScopeMetadata,
   buildStatusChangeMetadata,
 } from "@/lib/activity";
 
@@ -56,6 +57,22 @@ describe("activity metadata builders", () => {
     ).toEqual({
       issueTitle: "Fix RBAC",
       commentId: "comment_1",
+    });
+  });
+
+  it("builds stable sprint-scope metadata", () => {
+    expect(
+      buildSprintScopeMetadata({
+        issueTitle: "Ship velocity chart",
+        sprintId: "sprint_1",
+        sprintName: "Sprint 12",
+        statusAtChange: "IN_PROGRESS",
+      }),
+    ).toEqual({
+      issueTitle: "Ship velocity chart",
+      sprintId: "sprint_1",
+      sprintName: "Sprint 12",
+      statusAtChange: "IN_PROGRESS",
     });
   });
 });

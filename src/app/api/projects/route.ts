@@ -5,6 +5,7 @@ import {
   requireOrganizationMembership,
   requireOrganizationRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { createProjectSchema } from "@/lib/validators";
 
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const payload = createProjectSchema.parse(await request.json());
 
     await requireOrganizationRole(userId, payload.organizationId, "ADMIN");

@@ -19,7 +19,10 @@ export default async function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <CommandPaletteProvider currentUserId={session?.user?.id ?? null}>
+        <CommandPaletteProvider
+          currentUserId={session?.user?.id ?? null}
+          currentUserIsDemo={session?.user?.isDemo ?? false}
+        >
           {children}
         </CommandPaletteProvider>
       </body>

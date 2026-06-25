@@ -5,11 +5,14 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
+  CalendarRange,
+  CheckCircle2,
   Copy,
   ExternalLink,
   Globe2,
   Link2,
   MessageSquare,
+  Play,
   Plus,
   RefreshCw,
   Wifi,
@@ -19,8 +22,12 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -35,11 +42,13 @@ import {
 } from "@/commands/issues";
 import { createAssignIssueCommand } from "@/commands/members";
 import { getSocketClient } from "@/lib/socket-client";
+import { getMutationErrorMessage } from "@/lib/demo-client";
 
 type MembershipRole = "OWNER" | "ADMIN" | "DEVELOPER" | "VIEWER";
 type IssueStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 type WorkloadStatus = "UNDERLOADED" | "BALANCED" | "OVERLOADED";
+type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED";
 
 type ProjectMember = {
   id: string;
@@ -77,6 +86,8 @@ type Issue = {
   dueDate: string | null;
   estimatedHours: number;
   labels: string[];
+  sprintId: string | null;
+  sprint: { id: string; name: string; status: SprintStatus } | null;
   isBlocked: boolean;
   assignee: { id: string; name: string; email: string } | null;
   reporter: { id: string; name: string; email: string };
@@ -198,6 +209,44 @@ type WeeklyReport = {
   createdAt: string;
 };
 
+type Sprint = {
+  id: string;
+  name: string;
+  status: SprintStatus;
+  startDate: string;
+  endDate: string;
+  _count: {
+    issues: number;
+    snapshots: number;
+  };
+};
+
+type Burndown = {
+  sprintId: string;
+  startDate: string;
+  endDate: string;
+  idealLine: { date: string; remaining: number }[];
+  actualLine: {
+    date: string;
+    remaining: number;
+    totalScope: number;
+    completed: number;
+  }[];
+  isComplete: boolean;
+};
+
+type Velocity = {
+  projectId: string;
+  sprints: {
+    sprintId: string;
+    name: string;
+    completed: number;
+    totalScope: number;
+    endDate: string;
+  }[];
+  averageVelocity: number;
+};
+
 type ProjectClientProps = {
   projectId: string;
   currentUserId: string;
@@ -298,6 +347,10 @@ function getPublicRoadmapUrl(baseUrl: string, slug: string) {
   return `${baseUrl.replace(/\/$/, "")}/p/${slug}`;
 }
 
+function dateInputToIso(date: string) {
+  return new Date(`${date}T00:00:00.000Z`).toISOString();
+}
+
 export function ProjectClient({
   projectId,
   currentUserId,
@@ -310,6 +363,10 @@ export function ProjectClient({
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [workload, setWorkload] = useState<WorkloadAnalytics | null>(null);
   const [reports, setReports] = useState<WeeklyReport[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [burndown, setBurndown] = useState<Burndown | null>(null);
+  const [velocity, setVelocity] = useState<Velocity | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -322,6 +379,9 @@ export function ProjectClient({
   const [dueDate, setDueDate] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("0");
   const [labelsInput, setLabelsInput] = useState("");
+  const [sprintName, setSprintName] = useState("");
+  const [sprintStartDate, setSprintStartDate] = useState("");
+  const [sprintEndDate, setSprintEndDate] = useState("");
   const [dependencyIssueId, setDependencyIssueId] = useState("");
   const [filterStatus, setFilterStatus] = useState<IssueStatus | "ALL">("ALL");
   const [filterAssigneeId, setFilterAssigneeId] = useState("ALL");
@@ -336,6 +396,8 @@ export function ProjectClient({
   const [isCreating, setIsCreating] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isUpdatingPublicLink, setIsUpdatingPublicLink] = useState(false);
+  const [isCreatingSprint, setIsCreatingSprint] = useState(false);
+  const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState(false);
 
   const project = useMemo(
     () => projects.find((item) => item.id === projectId),
@@ -352,6 +414,35 @@ export function ProjectClient({
     [reports, selectedReportId],
   );
 
+  const selectedSprint = useMemo(
+    () => sprints.find((sprint) => sprint.id === selectedSprintId) ?? null,
+    [selectedSprintId, sprints],
+  );
+
+  const burndownData = useMemo(() => {
+    if (!burndown) {
+      return [];
+    }
+
+    const actualByDate = new Map(
+      burndown.actualLine.map((point) => [
+        point.date.slice(0, 10),
+        point.remaining,
+      ]),
+    );
+
+    return burndown.idealLine.map((point) => ({
+      date: point.date.slice(0, 10),
+      label: new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(point.date)),
+      ideal: point.remaining,
+      actual: actualByDate.get(point.date.slice(0, 10)) ?? null,
+    }));
+  }, [burndown]);
+
   const members = project?.organization.memberships ?? [];
   const currentMembership = members.find((member) => member.user.id === currentUserId);
   const currentRole = currentMembership?.role;
@@ -362,6 +453,8 @@ export function ProjectClient({
   const canManageDependencies = hasMinimumRole(currentRole, "DEVELOPER");
   const canGenerateReports = hasMinimumRole(currentRole, "ADMIN");
   const canManagePublicRoadmap = hasMinimumRole(currentRole, "ADMIN");
+  const canManageSprints = hasMinimumRole(currentRole, "ADMIN");
+  const canUpdateSprintScope = hasMinimumRole(currentRole, "DEVELOPER");
   const availableLabels = useMemo(
     () => Array.from(new Set(issues.flatMap((issue) => issue.labels))).sort(),
     [issues],
@@ -396,6 +489,16 @@ export function ProjectClient({
     setDependencies(body);
   }, []);
 
+  const loadBurndown = useCallback(async (sprintId: string) => {
+    const response = await fetch(`/api/sprints/${sprintId}/burndown`);
+    if (!response.ok) {
+      setBurndown(null);
+      return;
+    }
+
+    setBurndown((await response.json()) as Burndown);
+  }, []);
+
   const loadProject = useCallback(async () => {
     const issueParams = new URLSearchParams();
     if (filterStatus !== "ALL") issueParams.set("status", filterStatus);
@@ -404,7 +507,16 @@ export function ProjectClient({
     if (showBlockedOnly) issueParams.set("blocked", "true");
     if (query.trim()) issueParams.set("q", query.trim());
 
-    const [projectResponse, issueResponse, activityResponse, analyticsResponse, workloadResponse, reportsResponse] =
+    const [
+      projectResponse,
+      issueResponse,
+      activityResponse,
+      analyticsResponse,
+      workloadResponse,
+      reportsResponse,
+      sprintsResponse,
+      velocityResponse,
+    ] =
       await Promise.all([
         fetch("/api/projects"),
         fetch(`/api/projects/${projectId}/issues?${issueParams.toString()}`),
@@ -412,6 +524,8 @@ export function ProjectClient({
         fetch(`/api/projects/${projectId}/analytics`),
         fetch(`/api/projects/${projectId}/analytics/workload?view=${workloadView}`),
         fetch(`/api/projects/${projectId}/reports/weekly`),
+        fetch(`/api/projects/${projectId}/sprints`),
+        fetch(`/api/projects/${projectId}/velocity?limit=6`),
       ]);
 
     if (
@@ -420,7 +534,9 @@ export function ProjectClient({
       !activityResponse.ok ||
       !analyticsResponse.ok ||
       !workloadResponse.ok ||
-      !reportsResponse.ok
+      !reportsResponse.ok ||
+      !sprintsResponse.ok ||
+      !velocityResponse.ok
     ) {
       setError("Could not load project data.");
       setIsLoading(false);
@@ -433,6 +549,8 @@ export function ProjectClient({
     const analyticsBody = (await analyticsResponse.json()) as { analytics: Analytics };
     const workloadBody = (await workloadResponse.json()) as WorkloadAnalytics;
     const reportsBody = (await reportsResponse.json()) as { reports: WeeklyReport[] };
+    const sprintsBody = (await sprintsResponse.json()) as { sprints: Sprint[] };
+    const velocityBody = (await velocityResponse.json()) as Velocity;
 
     setProjects(projectBody.projects);
     setIssues(issueBody.issues);
@@ -440,6 +558,22 @@ export function ProjectClient({
     setAnalytics(analyticsBody.analytics);
     setWorkload(workloadBody);
     setReports(reportsBody.reports);
+    setSprints(sprintsBody.sprints);
+    setVelocity(velocityBody);
+    if (sprintsBody.sprints.length === 0) {
+      setBurndown(null);
+    }
+    setSelectedSprintId((current) => {
+      if (current && sprintsBody.sprints.some((sprint) => sprint.id === current)) {
+        return current;
+      }
+
+      return (
+        sprintsBody.sprints.find((sprint) => sprint.status === "ACTIVE")?.id ??
+        sprintsBody.sprints[0]?.id ??
+        null
+      );
+    });
     setIsLoading(false);
 
     if (selectedIssueId && !issueBody.issues.some((issue) => issue.id === selectedIssueId)) {
@@ -465,6 +599,18 @@ export function ProjectClient({
 
     return () => window.clearTimeout(handle);
   }, [loadProject]);
+
+  useEffect(() => {
+    if (!selectedSprintId) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void loadBurndown(selectedSprintId);
+    }, 0);
+
+    return () => window.clearTimeout(handle);
+  }, [loadBurndown, selectedSprintId]);
 
   useEffect(() => {
     setCommandContext({
@@ -641,6 +787,17 @@ export function ProjectClient({
       void loadProject();
     };
 
+    const onSprintUpdated = (payload: LivePayload) => {
+      if (payload.projectId !== projectId) {
+        return;
+      }
+      setTransientLiveMessage("Sprint planning updated");
+      void loadProject();
+      if (selectedSprintId) {
+        void loadBurndown(selectedSprintId);
+      }
+    };
+
     socket.on("issue.created", onIssueCreated);
     socket.on("issue.moved", onIssueMoved);
     socket.on("issue.assigned", onIssueAssigned);
@@ -648,6 +805,7 @@ export function ProjectClient({
     socket.on("dependency.added", onDependencyChanged);
     socket.on("dependency.removed", onDependencyChanged);
     socket.on("report.generated", onReportGenerated);
+    socket.on("sprint.updated", onSprintUpdated);
 
     return () => {
       socket.emit("project:leave", projectId);
@@ -658,14 +816,17 @@ export function ProjectClient({
       socket.off("dependency.added", onDependencyChanged);
       socket.off("dependency.removed", onDependencyChanged);
       socket.off("report.generated", onReportGenerated);
+      socket.off("sprint.updated", onSprintUpdated);
     };
   }, [
     currentUserId,
     loadComments,
     loadDependencies,
+    loadBurndown,
     loadProject,
     projectId,
     selectedIssueId,
+    selectedSprintId,
     setTransientLiveMessage,
   ]);
 
@@ -691,7 +852,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not create issue.");
+      showMutationError(body?.error, "Could not create issue.");
       setIsCreating(false);
       return;
     }
@@ -726,7 +887,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not move issue.");
+      showMutationError(body?.error, "Could not move issue.");
       return;
     }
 
@@ -742,7 +903,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not assign issue.");
+      showMutationError(body?.error, "Could not assign issue.");
       return;
     }
 
@@ -763,7 +924,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not add comment.");
+      showMutationError(body?.error, "Could not add comment.");
       return;
     }
 
@@ -785,7 +946,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not add dependency.");
+      showMutationError(body?.error, "Could not add dependency.");
       return;
     }
 
@@ -800,7 +961,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not remove dependency.");
+      showMutationError(body?.error, "Could not remove dependency.");
       return;
     }
 
@@ -819,7 +980,7 @@ export function ProjectClient({
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not queue weekly report.");
+      showMutationError(body?.error, "Could not queue weekly report.");
       setIsGeneratingReport(false);
       return;
     }
@@ -827,6 +988,113 @@ export function ProjectClient({
     setIsGeneratingReport(false);
     setTransientLiveMessage("Weekly report generation queued");
     await loadProject();
+  }
+
+  async function createSprint(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sprintName || !sprintStartDate || !sprintEndDate) {
+      return;
+    }
+
+    setError("");
+    setIsCreatingSprint(true);
+
+    const response = await fetch(`/api/projects/${projectId}/sprints`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: sprintName,
+        startDate: dateInputToIso(sprintStartDate),
+        endDate: dateInputToIso(sprintEndDate),
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string; sprint?: Sprint }
+      | null;
+
+    if (!response.ok) {
+      showMutationError(body?.error, "Could not create sprint.");
+      setIsCreatingSprint(false);
+      return;
+    }
+
+    setSprintName("");
+    setSprintStartDate("");
+    setSprintEndDate("");
+    setIsCreatingSprint(false);
+    if (body?.sprint) {
+      setSelectedSprintId(body.sprint.id);
+    }
+    await loadProject();
+  }
+
+  async function updateSprintStatus(status: SprintStatus) {
+    if (!selectedSprint) {
+      return;
+    }
+
+    setError("");
+    const response = await fetch(`/api/sprints/${selectedSprint.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+
+    if (!response.ok) {
+      showMutationError(body?.error, "Could not update sprint.");
+      return;
+    }
+
+    notify(status === "ACTIVE" ? "Sprint started" : "Sprint completed");
+    await loadProject();
+  }
+
+  async function updateIssueSprint(issueId: string, sprintId: string | null) {
+    const response = await fetch(`/api/issues/${issueId}/sprint`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sprintId }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+
+    if (!response.ok) {
+      showMutationError(body?.error, "Could not update sprint scope.");
+      return;
+    }
+
+    await loadProject();
+  }
+
+  async function generateSnapshot() {
+    if (!selectedSprint) {
+      return;
+    }
+
+    setError("");
+    setIsGeneratingSnapshot(true);
+    const response = await fetch(
+      `/api/sprints/${selectedSprint.id}/snapshot/generate`,
+      { method: "POST" },
+    );
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+
+    if (!response.ok) {
+      showMutationError(body?.error, "Could not generate sprint snapshot.");
+      setIsGeneratingSnapshot(false);
+      return;
+    }
+
+    setIsGeneratingSnapshot(false);
+    notify("Sprint snapshot generated");
+    await Promise.all([loadProject(), loadBurndown(selectedSprint.id)]);
   }
 
   async function updatePublicRoadmap(enabled: boolean) {
@@ -844,7 +1112,7 @@ export function ProjectClient({
       | null;
 
     if (!response.ok) {
-      setError(body?.error ?? "Could not update the public roadmap.");
+      showMutationError(body?.error, "Could not update the public roadmap.");
       setIsUpdatingPublicLink(false);
       return;
     }
@@ -863,6 +1131,14 @@ export function ProjectClient({
       getPublicRoadmapUrl(publicBaseUrl, project.publicSlug),
     );
     notify("Public roadmap link copied");
+  }
+
+  function showMutationError(message: string | undefined, fallback: string) {
+    const friendlyMessage = getMutationErrorMessage(message, fallback);
+    setError(friendlyMessage);
+    if (message === "Demo accounts are read-only") {
+      notify(friendlyMessage, "error");
+    }
   }
 
   const dependencyOptions = issues.filter((issue) => issue.id !== selectedIssueId);
@@ -967,7 +1243,115 @@ export function ProjectClient({
             ) : null}
           </section>
 
+          <section className="rounded-lg border bg-background p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <CalendarRange className="size-4" />
+              <h2 className="text-base font-semibold">Sprint planning</h2>
+            </div>
+            {sprints.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Create a sprint to track scope, burndown, and delivery velocity.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <select
+                  value={selectedSprintId ?? ""}
+                  onChange={(event) => {
+                    setBurndown(null);
+                    setSelectedSprintId(event.target.value);
+                  }}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {sprints.map((sprint) => (
+                    <option key={sprint.id} value={sprint.id}>
+                      {sprint.name} · {statusLabel(sprint.status)}
+                    </option>
+                  ))}
+                </select>
+                {selectedSprint ? (
+                  <div className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">{selectedSprint.name}</p>
+                      <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
+                        {statusLabel(selectedSprint.status)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {formatDate(selectedSprint.startDate)} to{" "}
+                      {formatDate(selectedSprint.endDate)} ·{" "}
+                      {selectedSprint._count.issues} issues
+                    </p>
+                    {canManageSprints && selectedSprint.status !== "COMPLETED" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 w-full"
+                        onClick={() =>
+                          void updateSprintStatus(
+                            selectedSprint.status === "PLANNED"
+                              ? "ACTIVE"
+                              : "COMPLETED",
+                          )
+                        }
+                      >
+                        {selectedSprint.status === "PLANNED" ? (
+                          <Play className="size-4" />
+                        ) : (
+                          <CheckCircle2 className="size-4" />
+                        )}
+                        {selectedSprint.status === "PLANNED"
+                          ? "Start sprint"
+                          : "Complete sprint"}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+            {canManageSprints ? (
+              <form onSubmit={createSprint} className="mt-4 space-y-3 border-t pt-4">
+                <input
+                  value={sprintName}
+                  onChange={(event) => setSprintName(event.target.value)}
+                  required
+                  minLength={2}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Sprint name"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={sprintStartDate}
+                    onChange={(event) => setSprintStartDate(event.target.value)}
+                    required
+                    aria-label="Sprint start date"
+                    className="h-10 min-w-0 rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <input
+                    type="date"
+                    value={sprintEndDate}
+                    onChange={(event) => setSprintEndDate(event.target.value)}
+                    required
+                    aria-label="Sprint end date"
+                    className="h-10 min-w-0 rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="w-full"
+                  disabled={isCreatingSprint}
+                >
+                  <Plus className="size-4" />
+                  {isCreatingSprint ? "Creating..." : "Create sprint"}
+                </Button>
+              </form>
+            ) : null}
+          </section>
+
           {analytics ? <AnalyticsPanel analytics={analytics} /> : null}
+          {velocity ? <VelocityPanel velocity={velocity} /> : null}
           {workload ? (
             <WorkloadPanel
               analytics={workload}
@@ -1050,6 +1434,73 @@ export function ProjectClient({
         </aside>
 
         <section className="space-y-4">
+          <section className="rounded-lg border bg-background p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold">Sprint burndown</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Ideal remaining work compared with daily scope snapshots.
+                </p>
+              </div>
+              {selectedSprint ? (
+                <span className="rounded-md border px-2 py-1 text-xs font-medium">
+                  {selectedSprint.name}
+                </span>
+              ) : null}
+            </div>
+            {!selectedSprint ? (
+              <p className="mt-5 text-sm text-muted-foreground">
+                Select or create a sprint to view burndown data.
+              </p>
+            ) : burndownData.length === 0 ||
+              (burndown?.actualLine.length ?? 0) === 0 ? (
+              <div className="mt-5 rounded-md border border-dashed p-5 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Burndown data will appear after the first daily snapshot.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => void generateSnapshot()}
+                  disabled={isGeneratingSnapshot}
+                >
+                  <RefreshCw className="size-4" />
+                  {isGeneratingSnapshot ? "Generating..." : "Generate now"}
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-5 h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={burndownData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      type="linear"
+                      dataKey="ideal"
+                      name="Ideal"
+                      stroke="#64748b"
+                      strokeDasharray="6 5"
+                      dot={false}
+                    />
+                    <Line
+                      type="linear"
+                      dataKey="actual"
+                      name="Actual"
+                      stroke="#0f766e"
+                      strokeWidth={2}
+                      connectNulls={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+
           <div className="rounded-lg border bg-background p-4 shadow-sm">
             <div className="grid gap-3 md:grid-cols-4">
               <input
@@ -1251,6 +1702,37 @@ export function ProjectClient({
                     </select>
                   ) : (
                     <p className="mt-2 text-sm">{selectedIssue.assignee?.name ?? "Unassigned"}</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Sprint
+                  </p>
+                  {canUpdateSprintScope ? (
+                    <select
+                      value={selectedIssue.sprintId ?? ""}
+                      onChange={(event) =>
+                        void updateIssueSprint(
+                          selectedIssue.id,
+                          event.target.value || null,
+                        )
+                      }
+                      className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Backlog</option>
+                      {sprints
+                        .filter((sprint) => sprint.status !== "COMPLETED")
+                        .map((sprint) => (
+                          <option key={sprint.id} value={sprint.id}>
+                            {sprint.name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <p className="mt-2 text-sm">
+                      {selectedIssue.sprint?.name ?? "Backlog"}
+                    </p>
                   )}
                 </div>
 
@@ -1527,6 +2009,14 @@ function describeActivity(activity: Activity) {
       return `${activity.actor.name} moved "${issueTitle}" to ${statusLabel(activity.metadata.toStatus ?? "IN_PROGRESS")}`;
     case "ISSUE_ASSIGNED":
       return `${activity.actor.name} updated assignment for "${issueTitle}"`;
+    case "ISSUE_ADDED_TO_SPRINT":
+      return `${activity.actor.name} added "${issueTitle}" to ${activity.metadata.sprintName ?? "a sprint"}`;
+    case "ISSUE_REMOVED_FROM_SPRINT":
+      return `${activity.actor.name} removed "${issueTitle}" from ${activity.metadata.sprintName ?? "a sprint"}`;
+    case "SPRINT_CREATED":
+      return `${activity.actor.name} created ${activity.metadata.sprintName ?? "a sprint"}`;
+    case "SPRINT_UPDATED":
+      return `${activity.actor.name} updated ${activity.metadata.sprintName ?? "a sprint"}`;
     case "COMMENT_CREATED":
       return `${activity.actor.name} commented on "${issueTitle}"`;
     case "ISSUE_DEPENDENCY_ADDED":
@@ -1566,6 +2056,54 @@ function AnalyticsPanel({ analytics }: { analytics: Analytics }) {
           }))}
         />
       </div>
+    </section>
+  );
+}
+
+function VelocityPanel({ velocity }: { velocity: Velocity }) {
+  return (
+    <section className="rounded-lg border bg-background p-5 shadow-sm">
+      <h2 className="text-base font-semibold">Velocity</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Completed issues across the latest finished sprints.
+      </p>
+      {velocity.sprints.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Complete a sprint with snapshots to establish velocity.
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={velocity.sprints}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <ReferenceLine
+                  y={velocity.averageVelocity}
+                  stroke="#64748b"
+                  strokeDasharray="5 4"
+                  label={{
+                    value: `Avg ${velocity.averageVelocity}`,
+                    position: "insideTopRight",
+                    fontSize: 11,
+                  }}
+                />
+                <Bar
+                  dataKey="completed"
+                  name="Completed"
+                  radius={[4, 4, 0, 0]}
+                  fill="#0f766e"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Average velocity: {velocity.averageVelocity} issues per sprint
+          </p>
+        </>
+      )}
     </section>
   );
 }

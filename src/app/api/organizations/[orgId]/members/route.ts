@@ -7,6 +7,7 @@ import {
   requireOrganizationMembership,
   requireOrganizationRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { updateMembershipRoleSchema } from "@/lib/validators";
 
@@ -43,7 +44,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { orgId } = await context.params;
     const { membershipId, role } = updateMembershipRoleSchema
       .extend({ membershipId: z.string().min(1) })

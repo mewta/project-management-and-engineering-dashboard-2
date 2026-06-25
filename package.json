@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "NODE_ENV=production node server.mjs",
     "worker:reports": "tsx src/workers/weekly-report-worker.ts",
+    "demo:seed": "tsx prisma/seed-demo.ts",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

@@ -45,6 +45,13 @@ export async function GET(request: Request, context: RouteContext) {
         reporter: {
           select: { id: true, name: true, email: true },
         },
+        sprint: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
         _count: {
           select: {
             comments: true,

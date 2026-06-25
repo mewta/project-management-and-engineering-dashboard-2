@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FolderPlus, MailPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCommandPalette } from "@/components/command-palette/command-palette-provider";
+import { getMutationErrorMessage } from "@/lib/demo-client";
 
 type Organization = {
   id: string;
@@ -50,6 +52,7 @@ type OrganizationClientProps = {
 };
 
 export function OrganizationClient({ organizationId }: OrganizationClientProps) {
+  const { notify } = useCommandPalette();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -173,7 +176,7 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not create project.");
+      showMutationError(body?.error, "Could not create project.");
       setIsCreating(false);
       return;
     }
@@ -205,7 +208,7 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
       | null;
 
     if (!response.ok) {
-      setError(body?.error ?? "Could not send invitation.");
+      showMutationError(body?.error, "Could not send invitation.");
       setIsInviting(false);
       return;
     }
@@ -232,12 +235,20 @@ export function OrganizationClient({ organizationId }: OrganizationClientProps) 
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not update role.");
+      showMutationError(body?.error, "Could not update role.");
       return;
     }
 
     setIsLoading(true);
     await loadOrganization();
+  }
+
+  function showMutationError(message: string | undefined, fallback: string) {
+    const friendlyMessage = getMutationErrorMessage(message, fallback);
+    setError(friendlyMessage);
+    if (message === "Demo accounts are read-only") {
+      notify(friendlyMessage, "error");
+    }
   }
 
   return (

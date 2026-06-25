@@ -24,6 +24,7 @@ type CommandPaletteContextValue = {
   close: () => void;
   setCommandContext: (context: CommandContextState) => void;
   notify: (message: string, variant?: "success" | "error") => void;
+  isDemo: boolean;
 };
 
 const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null);
@@ -31,9 +32,11 @@ const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(n
 export function CommandPaletteProvider({
   children,
   currentUserId,
+  currentUserIsDemo,
 }: {
   children: React.ReactNode;
   currentUserId: string | null;
+  currentUserIsDemo: boolean;
 }) {
   const [registry] = useState(() => new CommandRegistry());
   const [isOpen, setIsOpen] = useState(false);
@@ -124,8 +127,16 @@ export function CommandPaletteProvider({
       close,
       setCommandContext,
       notify,
+      isDemo: currentUserIsDemo,
     }),
-    [close, notify, open, registerCommand, setCommandContext],
+    [
+      close,
+      currentUserIsDemo,
+      notify,
+      open,
+      registerCommand,
+      setCommandContext,
+    ],
   );
 
   return (

@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2, FolderKanban, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCommandPalette } from "@/components/command-palette/command-palette-provider";
+import { getMutationErrorMessage } from "@/lib/demo-client";
 
 type Organization = {
   id: string;
@@ -23,6 +25,7 @@ type Project = {
 };
 
 export function DashboardClient() {
+  const { notify } = useCommandPalette();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [organizationName, setOrganizationName] = useState("");
@@ -101,7 +104,14 @@ export function DashboardClient() {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not create organization.");
+      const message = getMutationErrorMessage(
+        body?.error,
+        "Could not create organization.",
+      );
+      setError(message);
+      if (body?.error === "Demo accounts are read-only") {
+        notify(message, "error");
+      }
       setIsCreating(false);
       return;
     }

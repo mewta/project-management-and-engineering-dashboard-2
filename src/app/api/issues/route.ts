@@ -9,6 +9,7 @@ import {
   requireProjectAccess,
   requireProjectRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { createIssueSchema, issueFilterSchema } from "@/lib/validators";
 
@@ -72,6 +73,13 @@ export async function GET(request: Request) {
             key: true,
           },
         },
+        sprint: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
         _count: {
           select: {
             comments: true,
@@ -103,7 +111,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const payload = createIssueSchema.parse(await request.json());
     const { project } = await requireProjectRole(userId, payload.projectId, "DEVELOPER");
     const actor = await prisma.user.findUnique({
@@ -148,6 +156,13 @@ export async function POST(request: Request) {
               id: true,
               name: true,
               email: true,
+            },
+          },
+          sprint: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
             },
           },
         },

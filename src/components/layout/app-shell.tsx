@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, LogOut, Search } from "lucide-react";
+import { LayoutDashboard, LogOut, Search, X } from "lucide-react";
 import { useCommandPalette } from "@/components/command-palette/command-palette-provider";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +16,8 @@ type AppShellProps = {
 
 export function AppShell({ children, title, description }: AppShellProps) {
   const router = useRouter();
-  const { open } = useCommandPalette();
+  const { isDemo, open } = useCommandPalette();
+  const [showDemoBanner, setShowDemoBanner] = useState(true);
 
   async function handleSignOut() {
     await signOut({ redirect: false });
@@ -46,6 +48,26 @@ export function AppShell({ children, title, description }: AppShellProps) {
           </div>
         </div>
       </header>
+      {isDemo && showDemoBanner ? (
+        <div className="border-b border-amber-200 bg-amber-50 text-amber-950">
+          <div className="mx-auto flex min-h-11 w-full max-w-7xl items-center justify-between gap-4 px-6 py-2 text-sm">
+            <p>
+              You&apos;re viewing a read-only demo.{" "}
+              <Link href="/signup" className="font-semibold underline underline-offset-4">
+                Sign up to create your own workspace
+              </Link>
+            </p>
+            <button
+              type="button"
+              aria-label="Dismiss demo banner"
+              onClick={() => setShowDemoBanner(false)}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-amber-100"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
       <section className="mx-auto w-full max-w-7xl px-6 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>

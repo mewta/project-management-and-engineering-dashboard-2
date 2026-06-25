@@ -176,6 +176,47 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Demo Mode
+
+Create or reset the deterministic read-only demo workspace:
+
+```bash
+npm run demo:seed
+```
+
+The seed creates `DevBoard Demo Co` with three projects, 30 issues, comments,
+dependencies, activity history, weekly reports, six completed sprints, three active
+sprints, and historical burndown snapshots. The landing and login pages expose a
+passwordless `Try Demo` action.
+
+When `REDIS_URL` is configured, the existing BullMQ worker also schedules a demo reset
+every six hours:
+
+```bash
+npm run worker:reports
+```
+
+The reset deletes only the organization with the fixed demo organization ID before
+recreating its data. Demo users remain server-enforced read-only across every mutating
+API route.
+
+## Sprint Analytics
+
+Feature 4 adds sprint planning, activity-derived daily snapshots, burndown charts,
+and project velocity:
+
+- `GET/POST /api/projects/:id/sprints`
+- `PATCH /api/sprints/:sprintId`
+- `PATCH /api/issues/:id/sprint`
+- `POST /api/sprints/:sprintId/snapshot/generate`
+- `GET /api/sprints/:sprintId/burndown`
+- `GET /api/projects/:projectId/velocity?limit=6`
+
+Sprint scope additions, removals, and issue status changes are stored in
+`ActivityLog`. The snapshot generator replays that history through the end of each
+UTC day and upserts one `SprintSnapshot` per sprint/date. With `REDIS_URL` configured,
+the BullMQ worker schedules active-sprint snapshots daily at `00:05 UTC`.
+
 ## VS Code Workflow
 
 Open the project:

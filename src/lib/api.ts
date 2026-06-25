@@ -49,6 +49,41 @@ export async function requireUserId() {
   return userId;
 }
 
+export async function requireWritableUserId() {
+  const userId = await requireUserId();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isDemo: true },
+  });
+
+  if (!user) {
+    throw new ApiError(401, "Authentication required");
+  }
+
+  if (user.isDemo) {
+    throw new ApiError(403, "Demo accounts are read-only");
+  }
+
+  return userId;
+}
+
+export async function assertNoDemoSession() {
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isDemo: true },
+  });
+
+  if (user?.isDemo) {
+    throw new ApiError(403, "Demo accounts are read-only");
+  }
+}
+
 export async function requireOrganizationMembership(
   userId: string,
   organizationId: string,
@@ -156,6 +191,34 @@ export async function requireIssueAccess(userId: string, issueId: string) {
   }
 
   return issue;
+}
+
+export async function requireSprintAccess(userId: string, sprintId: string) {
+  const sprint = await prisma.sprint.findFirst({
+    where: {
+      id: sprintId,
+      project: {
+        organization: {
+          memberships: {
+            some: { userId },
+          },
+        },
+      },
+    },
+    include: {
+      project: {
+        include: {
+          organization: true,
+        },
+      },
+    },
+  });
+
+  if (!sprint) {
+    throw new ApiError(404, "Sprint not found");
+  }
+
+  return sprint;
 }
 
 export async function getProjectMembership(userId: string, projectId: string) {

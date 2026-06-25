@@ -7,7 +7,7 @@ import {
   handleApiError,
   requireIssueAccess,
   requireProjectRole,
-  requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 
 type RouteContext = {
@@ -16,7 +16,7 @@ type RouteContext = {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id: issueId, dependencyId } = await context.params;
     const issue = await requireIssueAccess(userId, issueId);
     const actor = await prisma.user.findUnique({

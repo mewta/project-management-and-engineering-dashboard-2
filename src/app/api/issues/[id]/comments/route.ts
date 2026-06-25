@@ -7,6 +7,7 @@ import {
   requireIssueAccess,
   requireOrganizationRole,
   requireUserId,
+  requireWritableUserId,
 } from "@/lib/api";
 import { createCommentSchema } from "@/lib/validators";
 
@@ -43,7 +44,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireWritableUserId();
     const { id } = await context.params;
     const payload = createCommentSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);

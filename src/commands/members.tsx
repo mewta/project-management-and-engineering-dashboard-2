@@ -3,6 +3,7 @@
 import { UserRoundCheck } from "lucide-react";
 import type { Command } from "@/components/command-palette/types";
 import { searchCommandData, stripCommandTerms } from "@/commands/search";
+import { getMutationErrorMessage } from "@/lib/demo-client";
 
 export function createAssignIssueCommand({
   issueId,
@@ -70,6 +71,8 @@ async function assignIssue(issueId: string, assigneeId: string | null) {
     const body = (await response.json().catch(() => null)) as
       | { error?: string }
       | null;
-    throw new Error(body?.error ?? "Could not assign issue");
+    throw new Error(
+      getMutationErrorMessage(body?.error, "Could not assign issue"),
+    );
   }
 }
