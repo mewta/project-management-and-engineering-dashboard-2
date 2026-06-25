@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { CommandPaletteProvider } from "@/components/command-palette/command-palette-provider";
+import { authOptions } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -6,14 +9,20 @@ export const metadata: Metadata = {
   description: "Real-time project management and engineering dashboard",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <CommandPaletteProvider currentUserId={session?.user?.id ?? null}>
+          {children}
+        </CommandPaletteProvider>
+      </body>
     </html>
   );
 }

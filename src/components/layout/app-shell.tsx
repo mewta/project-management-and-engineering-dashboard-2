@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, LogOut } from "lucide-react";
+import { LayoutDashboard, LogOut, Search } from "lucide-react";
+import { useCommandPalette } from "@/components/command-palette/command-palette-provider";
 import { Button } from "@/components/ui/button";
 
 type AppShellProps = {
@@ -14,6 +15,7 @@ type AppShellProps = {
 
 export function AppShell({ children, title, description }: AppShellProps) {
   const router = useRouter();
+  const { open } = useCommandPalette();
 
   async function handleSignOut() {
     await signOut({ redirect: false });
@@ -29,10 +31,19 @@ export function AppShell({ children, title, description }: AppShellProps) {
             <LayoutDashboard className="size-5" />
             DevBoard
           </Link>
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
-            <LogOut className="mr-2 size-4" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={open}>
+              <Search className="size-4" />
+              <span className="hidden sm:inline">Command palette</span>
+              <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground md:inline">
+                ⌘K
+              </kbd>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="size-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </div>
         </div>
       </header>
       <section className="mx-auto w-full max-w-7xl px-6 py-8">

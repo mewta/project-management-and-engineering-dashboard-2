@@ -41,6 +41,9 @@ enum ActivityAction {
   ISSUE_STATUS_CHANGED
   ISSUE_ASSIGNED
   COMMENT_CREATED
+  ISSUE_DEPENDENCY_ADDED
+  ISSUE_DEPENDENCY_REMOVED
+  WEEKLY_REPORT_GENERATED
 }
 
 model User {
@@ -66,6 +69,7 @@ model Organization {
   memberships  Membership[]
   invitations  Invitation[]
   projects     Project[]
+  weeklyReports WeeklyReport[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -93,6 +97,7 @@ model Project {
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   issues         Issue[]
   activities     ActivityLog[]
+  weeklyReports  WeeklyReport[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -101,27 +106,44 @@ model Project {
 }
 
 model Issue {
-  id          String        @id @default(cuid())
-  title       String
-  description String?
-  status      IssueStatus   @default(TODO)
-  priority    IssuePriority @default(MEDIUM)
-  dueDate     DateTime?
-  labels      String[]      @default([])
-  projectId   String
-  assigneeId  String?
-  reporterId  String
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    User?         @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter    User          @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  comments    Comment[]
-  activities  ActivityLog[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                    String            @id @default(cuid())
+  title                 String
+  description           String?
+  status                IssueStatus       @default(TODO)
+  priority              IssuePriority     @default(MEDIUM)
+  dueDate               DateTime?
+  estimatedHours        Int               @default(0)
+  labels                String[]          @default([])
+  projectId             String
+  assigneeId            String?
+  reporterId            String
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee              User?             @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter              User              @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  comments              Comment[]
+  activities            ActivityLog[]
+  blockedByDependencies IssueDependency[] @relation("BlockedIssue")
+  blockingDependencies  IssueDependency[] @relation("BlockingIssue")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@index([projectId, status])
   @@index([projectId, priority])
   @@index([assigneeId])
+}
+
+model IssueDependency {
+  id              String   @id @default(cuid())
+  blockedIssueId  String
+  blockingIssueId String
+  createdAt       DateTime @default(now())
+
+  blockedIssue    Issue    @relation("BlockedIssue", fields: [blockedIssueId], references: [id], onDelete: Cascade)
+  blockingIssue   Issue    @relation("BlockingIssue", fields: [blockingIssueId], references: [id], onDelete: Cascade)
+
+  @@unique([blockedIssueId, blockingIssueId])
+  @@index([blockedIssueId])
+  @@index([blockingIssueId])
 }
 
 model Invitation {
@@ -169,4 +191,21 @@ model ActivityLog {
 
   @@index([projectId, createdAt])
   @@index([issueId, createdAt])
+}
+
+model WeeklyReport {
+  id             String       @id @default(cuid())
+  projectId      String
+  organizationId String
+  weekStart      DateTime
+  weekEnd        DateTime
+  summary        Json
+  createdAt      DateTime     @default(now())
+
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@unique([projectId, weekStart, weekEnd])
 }

@@ -60,3 +60,51 @@ export function buildCommentCreatedMetadata({
     commentId,
   };
 }
+
+export function buildDependencyAddedMetadata({
+  issueTitle,
+  blockingIssueId,
+  blockingIssueTitle,
+}: {
+  issueTitle: string;
+  blockingIssueId: string;
+  blockingIssueTitle: string;
+}) {
+  return {
+    issueTitle,
+    blockingIssueId,
+    blockingIssueTitle,
+  };
+}
+
+export function buildDependencyRemovedMetadata({
+  issueTitle,
+  blockingIssueId,
+  blockingIssueTitle,
+}: {
+  issueTitle: string;
+  blockingIssueId: string;
+  blockingIssueTitle: string;
+}) {
+  return {
+    issueTitle,
+    blockingIssueId,
+    blockingIssueTitle,
+  };
+}
+
+export function buildWeeklyReportGeneratedMetadata({
+  projectName,
+  weekStart,
+  weekEnd,
+}: {
+  projectName: string;
+  weekStart: string;
+  weekEnd: string;
+}) {
+  return {
+    projectName,
+    weekStart,
+    weekEnd,
+  };
+}

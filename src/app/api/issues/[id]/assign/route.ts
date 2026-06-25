@@ -21,6 +21,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const payload = assignIssueSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
 
     await requireProjectRole(userId, issue.projectId, "ADMIN");
 
@@ -31,6 +35,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         "Assignee must be a member of the project organization",
       );
     }
+
+    let activityId: string | null = null;
 
     const updatedIssue = await prisma.$transaction(async (tx) => {
       const changedIssue = await tx.issue.update({
@@ -47,7 +53,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       });
 
       if (issue.assigneeId !== payload.assigneeId) {
-        await tx.activityLog.create({
+        const activity = await tx.activityLog.create({
           data: {
             action: "ISSUE_ASSIGNED",
             actorId: userId,
@@ -60,15 +66,29 @@ export async function PATCH(request: Request, context: RouteContext) {
             }),
           },
         });
+        activityId = activity.id;
       }
 
       return changedIssue;
     });
 
-    await emitProjectEvent(issue.projectId, "issue:updated", {
+    if (activityId) {
+      await emitProjectEvent(issue.projectId, "activity.created", {
+        projectId: issue.projectId,
+        activityId,
+        issueId: issue.id,
+      });
+    }
+
+    await emitProjectEvent(issue.projectId, "issue.assigned", {
       issueId: issue.id,
       projectId: issue.projectId,
       assigneeId: updatedIssue.assigneeId,
+      updatedBy: {
+        id: userId,
+        name: actor?.name ?? "Unknown user",
+      },
+      updatedAt: updatedIssue.updatedAt.toISOString(),
     });
 
     return NextResponse.json({ issue: updatedIssue });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildStatusChangeMetadata } from "@/lib/activity";
+import { getIssueDependencySummary } from "@/lib/dependencies";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   ApiError,
@@ -44,6 +45,23 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
+    if (payload.status === "DONE") {
+      const dependencySummary = await getIssueDependencySummary(prisma, issue.id);
+      if (dependencySummary.isBlocked) {
+        throw new ApiError(
+          400,
+          "This issue is blocked by unresolved dependencies and cannot be moved to Done",
+        );
+      }
+    }
+
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+
+    let activityId: string | null = null;
+
     const updatedIssue = await prisma.$transaction(async (tx) => {
       const changedIssue = await tx.issue.update({
         where: { id },
@@ -59,7 +77,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       });
 
       if (issue.status !== payload.status) {
-        await tx.activityLog.create({
+        const activity = await tx.activityLog.create({
           data: {
             action: "ISSUE_STATUS_CHANGED",
             actorId: userId,
@@ -72,15 +90,31 @@ export async function PATCH(request: Request, context: RouteContext) {
             }),
           },
         });
+
+        activityId = activity.id;
       }
 
       return changedIssue;
     });
 
-    await emitProjectEvent(issue.projectId, "issue:updated", {
+    if (activityId) {
+      await emitProjectEvent(issue.projectId, "activity.created", {
+        projectId: issue.projectId,
+        activityId,
+        issueId: issue.id,
+      });
+    }
+
+    await emitProjectEvent(issue.projectId, "issue.moved", {
       issueId: issue.id,
       projectId: issue.projectId,
-      status: updatedIssue.status,
+      fromStatus: issue.status,
+      toStatus: updatedIssue.status,
+      updatedBy: {
+        id: userId,
+        name: actor?.name ?? "Unknown user",
+      },
+      updatedAt: updatedIssue.updatedAt.toISOString(),
     });
 
     return NextResponse.json({ issue: updatedIssue });

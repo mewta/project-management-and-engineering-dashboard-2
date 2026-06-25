@@ -31,6 +31,7 @@ export const createIssueSchema = z.object({
   status: z.nativeEnum(IssueStatus).default(IssueStatus.TODO),
   assigneeId: z.string().min(1).optional(),
   dueDate: z.string().datetime().optional(),
+  estimatedHours: z.coerce.number().int().min(0).max(1000).optional(),
   labels: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
 });
 
@@ -53,6 +54,21 @@ export const issueFilterSchema = z.object({
   assigneeId: z.string().min(1).optional(),
   q: z.string().trim().min(1).max(100).optional(),
   label: z.string().trim().min(1).max(30).optional(),
+  blocked: z.coerce.boolean().optional(),
+});
+
+export const createIssueDependencySchema = z.object({
+  blockingIssueId: z.string().min(1),
+});
+
+export const workloadFilterSchema = z.object({
+  view: z.enum(["ALL", "OPEN", "OVERDUE"]).default("ALL"),
+  sprint: z.string().trim().min(1).optional(),
+});
+
+export const generateWeeklyReportSchema = z.object({
+  weekStart: z.string().datetime().optional(),
+  weekEnd: z.string().datetime().optional(),
 });
 
 export const inviteMemberSchema = z.object({
@@ -74,4 +90,14 @@ export const acceptInvitationSchema = z.object({
 
 export const invitationFilterSchema = z.object({
   status: z.nativeEnum(InvitationStatus).optional(),
+});
+
+export const commandSearchSchema = z.object({
+  q: z.string().trim().max(100).default(""),
+  scope: z.enum(["issues", "projects", "members", "all"]).default("all"),
+  projectId: z.string().min(1).optional(),
+});
+
+export const updateIssueLabelsSchema = z.object({
+  labels: z.array(z.string().trim().min(1).max(30)).max(10),
 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBlockedIssueIds } from "@/lib/dependencies";
 import { handleApiError, requireProjectAccess, requireUserId } from "@/lib/api";
 import { issueFilterSchema } from "@/lib/validators";
 
@@ -53,7 +54,22 @@ export async function GET(request: Request, context: RouteContext) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ issues });
+    const blockedIssueIds = await getBlockedIssueIds(
+      prisma,
+      id,
+      issues.map((issue) => issue.id),
+    );
+
+    const filteredIssues = filters.blocked
+      ? issues.filter((issue) => blockedIssueIds.has(issue.id))
+      : issues;
+
+    return NextResponse.json({
+      issues: filteredIssues.map((issue) => ({
+        ...issue,
+        isBlocked: blockedIssueIds.has(issue.id),
+      })),
+    });
   } catch (error) {
     return handleApiError(error);
   }

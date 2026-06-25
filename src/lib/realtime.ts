@@ -5,9 +5,17 @@ type DevBoardGlobal = typeof globalThis & {
 };
 
 export type ProjectRealtimeEvent =
-  | "issue:created"
-  | "issue:updated"
-  | "issue:commented";
+  | "issue.created"
+  | "issue.updated"
+  | "issue.moved"
+  | "issue.assigned"
+  | "issue.deleted"
+  | "comment.created"
+  | "dependency.added"
+  | "dependency.removed"
+  | "activity.created"
+  | "report.generated"
+  | "sprint.updated";
 
 export async function emitProjectEvent(
   projectId: string,

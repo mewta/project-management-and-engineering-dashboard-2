@@ -48,6 +48,12 @@ export async function POST(request: Request, context: RouteContext) {
     const payload = createCommentSchema.parse(await request.json());
     const issue = await requireIssueAccess(userId, id);
     await requireOrganizationRole(userId, issue.project.organizationId, "DEVELOPER");
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+
+    let activityId: string | null = null;
 
     const comment = await prisma.$transaction(async (tx) => {
       const createdComment = await tx.comment.create({
@@ -67,7 +73,7 @@ export async function POST(request: Request, context: RouteContext) {
         },
       });
 
-      await tx.activityLog.create({
+      const activity = await tx.activityLog.create({
         data: {
           action: "COMMENT_CREATED",
           actorId: userId,
@@ -79,15 +85,32 @@ export async function POST(request: Request, context: RouteContext) {
           }),
         },
       });
+      activityId = activity.id;
 
       return createdComment;
     });
 
-    await emitProjectEvent(issue.projectId, "issue:commented", {
+    await emitProjectEvent(issue.projectId, "comment.created", {
       issueId: issue.id,
       projectId: issue.projectId,
-      commentId: comment.id,
+      comment: {
+        id: comment.id,
+        content: comment.body,
+        author: {
+          id: actor?.id ?? comment.author.id,
+          name: actor?.name ?? comment.author.name,
+        },
+        createdAt: comment.createdAt.toISOString(),
+      },
     });
+
+    if (activityId) {
+      await emitProjectEvent(issue.projectId, "activity.created", {
+        projectId: issue.projectId,
+        activityId,
+        issueId: issue.id,
+      });
+    }
 
     return NextResponse.json({ comment }, { status: 201 });
   } catch (error) {

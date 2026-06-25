@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildIssueCreatedMetadata } from "@/lib/activity";
+import { getBlockedIssueIds } from "@/lib/dependencies";
 import { emitProjectEvent } from "@/lib/realtime";
 import {
   ensureUserBelongsToOrganization,
@@ -80,7 +81,21 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ issues });
+    const blockedIssueIds =
+      filters.projectId && issues.length > 0
+        ? await getBlockedIssueIds(prisma, filters.projectId, issues.map((issue) => issue.id))
+        : new Set<string>();
+
+    const filteredIssues = filters.blocked
+      ? issues.filter((issue) => blockedIssueIds.has(issue.id))
+      : issues;
+
+    return NextResponse.json({
+      issues: filteredIssues.map((issue) => ({
+        ...issue,
+        isBlocked: blockedIssueIds.has(issue.id),
+      })),
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -91,6 +106,10 @@ export async function POST(request: Request) {
     const userId = await requireUserId();
     const payload = createIssueSchema.parse(await request.json());
     const { project } = await requireProjectRole(userId, payload.projectId, "DEVELOPER");
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
 
     if (payload.assigneeId) {
       await ensureUserBelongsToOrganization(
@@ -100,6 +119,8 @@ export async function POST(request: Request) {
       );
     }
 
+    let activityId: string | null = null;
+
     const issue = await prisma.$transaction(async (tx) => {
       const createdIssue = await tx.issue.create({
         data: {
@@ -108,6 +129,7 @@ export async function POST(request: Request) {
           priority: payload.priority,
           status: payload.status,
           dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+          estimatedHours: payload.estimatedHours ?? 0,
           labels: payload.labels ?? [],
           projectId: payload.projectId,
           assigneeId: payload.assigneeId,
@@ -131,7 +153,7 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.activityLog.create({
+      const activity = await tx.activityLog.create({
         data: {
           action: "ISSUE_CREATED",
           actorId: userId,
@@ -144,14 +166,32 @@ export async function POST(request: Request) {
           }),
         },
       });
+      activityId = activity.id;
 
       return createdIssue;
     });
 
-    await emitProjectEvent(payload.projectId, "issue:created", {
+    await emitProjectEvent(payload.projectId, "issue.created", {
       issueId: issue.id,
       projectId: payload.projectId,
+      issue,
+      updatedBy: {
+        id: actor?.id ?? userId,
+        name: actor?.name ?? "Unknown user",
+      },
     });
+
+    if (activityId) {
+      await emitProjectEvent(payload.projectId, "activity.created", {
+        projectId: payload.projectId,
+        activityId,
+        issueId: issue.id,
+        updatedBy: {
+          id: actor?.id ?? userId,
+          name: actor?.name ?? "Unknown user",
+        },
+      });
+    }
 
     return NextResponse.json({ issue }, { status: 201 });
   } catch (error) {
