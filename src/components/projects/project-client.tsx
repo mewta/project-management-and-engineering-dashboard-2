@@ -5,6 +5,9 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
+  Copy,
+  ExternalLink,
+  Globe2,
   Link2,
   MessageSquare,
   Plus,
@@ -53,6 +56,8 @@ type Project = {
   name: string;
   key: string;
   description: string | null;
+  isPublic: boolean;
+  publicSlug: string | null;
   organization: {
     id: string;
     name: string;
@@ -196,6 +201,7 @@ type WeeklyReport = {
 type ProjectClientProps = {
   projectId: string;
   currentUserId: string;
+  publicBaseUrl: string;
 };
 
 type LivePayload = {
@@ -288,8 +294,16 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-export function ProjectClient({ projectId, currentUserId }: ProjectClientProps) {
-  const { registerCommand, setCommandContext } = useCommandPalette();
+function getPublicRoadmapUrl(baseUrl: string, slug: string) {
+  return `${baseUrl.replace(/\/$/, "")}/p/${slug}`;
+}
+
+export function ProjectClient({
+  projectId,
+  currentUserId,
+  publicBaseUrl,
+}: ProjectClientProps) {
+  const { notify, registerCommand, setCommandContext } = useCommandPalette();
   const [projects, setProjects] = useState<Project[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
@@ -321,6 +335,7 @@ export function ProjectClient({ projectId, currentUserId }: ProjectClientProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isUpdatingPublicLink, setIsUpdatingPublicLink] = useState(false);
 
   const project = useMemo(
     () => projects.find((item) => item.id === projectId),
@@ -346,6 +361,7 @@ export function ProjectClient({ projectId, currentUserId }: ProjectClientProps) 
   const canComment = hasMinimumRole(currentRole, "DEVELOPER");
   const canManageDependencies = hasMinimumRole(currentRole, "DEVELOPER");
   const canGenerateReports = hasMinimumRole(currentRole, "ADMIN");
+  const canManagePublicRoadmap = hasMinimumRole(currentRole, "ADMIN");
   const availableLabels = useMemo(
     () => Array.from(new Set(issues.flatMap((issue) => issue.labels))).sort(),
     [issues],
@@ -813,6 +829,42 @@ export function ProjectClient({ projectId, currentUserId }: ProjectClientProps) 
     await loadProject();
   }
 
+  async function updatePublicRoadmap(enabled: boolean) {
+    setError("");
+    setIsUpdatingPublicLink(true);
+
+    const response = await fetch(`/api/projects/${projectId}/public-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+
+    if (!response.ok) {
+      setError(body?.error ?? "Could not update the public roadmap.");
+      setIsUpdatingPublicLink(false);
+      return;
+    }
+
+    notify(enabled ? "Public roadmap enabled" : "Public roadmap disabled");
+    setIsUpdatingPublicLink(false);
+    await loadProject();
+  }
+
+  async function copyPublicRoadmapLink() {
+    if (!project?.publicSlug) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(
+      getPublicRoadmapUrl(publicBaseUrl, project.publicSlug),
+    );
+    notify("Public roadmap link copied");
+  }
+
   const dependencyOptions = issues.filter((issue) => issue.id !== selectedIssueId);
 
   return (
@@ -859,6 +911,60 @@ export function ProjectClient({ projectId, currentUserId }: ProjectClientProps) 
                 </span>
               ) : null}
             </div>
+          </section>
+
+          <section className="rounded-lg border bg-background p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Globe2 className="size-4" />
+              <h2 className="text-base font-semibold">Public roadmap</h2>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Share a read-only board without exposing members, comments, or activity.
+            </p>
+            <label className="mt-4 flex items-center justify-between gap-4 rounded-md border p-3">
+              <span>
+                <span className="block text-sm font-medium">Make roadmap public</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Anyone with the link can view project progress.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={project?.isPublic ?? false}
+                disabled={
+                  !canManagePublicRoadmap || isUpdatingPublicLink || !project
+                }
+                onChange={(event) => void updatePublicRoadmap(event.target.checked)}
+                className="size-4"
+              />
+            </label>
+            {project?.isPublic && project.publicSlug ? (
+              <div className="mt-3 space-y-2">
+                <p className="break-all rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  {getPublicRoadmapUrl(publicBaseUrl, project.publicSlug)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void copyPublicRoadmapLink()}
+                  >
+                    <Copy className="size-4" />
+                    Copy link
+                  </Button>
+                  <Link
+                    href={`/p/${project.publicSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-7 items-center justify-center gap-1 rounded-md border bg-background px-2.5 text-[0.8rem] font-medium hover:bg-muted"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Open
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           {analytics ? <AnalyticsPanel analytics={analytics} /> : null}

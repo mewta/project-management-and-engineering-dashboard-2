@@ -22,7 +22,11 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       title="Project"
       description="Create issues, move work across the board, comment, and inspect recent activity."
     >
-      <ProjectClient projectId={projectId} currentUserId={session.user.id} />
+      <ProjectClient
+        projectId={projectId}
+        currentUserId={session.user.id}
+        publicBaseUrl={process.env.NEXTAUTH_URL ?? ""}
+      />
     </AppShell>
   );
 }

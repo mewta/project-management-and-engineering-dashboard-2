@@ -93,6 +93,8 @@ model Project {
   name           String
   key            String
   description    String?
+  isPublic       Boolean       @default(false)
+  publicSlug     String?       @unique
   organizationId String
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   issues         Issue[]
